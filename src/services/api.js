@@ -1,5 +1,5 @@
 // src/services/api.js
-const API_BASE_URL = 'http://192.168.100.131:3000/api'; // Sesuaikan dengan URL backend Anda
+const API_BASE_URL = 'https://cryptoku-backend-beige.vercel.app/api'; // Sesuaikan dengan URL backend Anda
 
 /**
  * Memanggil endpoint backend untuk membuat quote transaksi.
