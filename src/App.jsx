@@ -1,9 +1,9 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
-import Home from "./pages/Home";
-import Order from "./pages/Order";
+import Home from "./pages/home";
+import Order from "./pages/order";
 import Market from "./pages/market";
-import Profile from "./pages/Profile";
+import Profile from "./pages/profile";
 import BottomNav from "./components/BottomNav";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
