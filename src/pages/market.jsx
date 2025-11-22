@@ -8,11 +8,23 @@ import { Sparklines, SparklinesLine } from "react-sparklines";
 import { useTheme } from "../contexts/ThemeContext";
 import GlobalHeader from "../components/GlobalHeader";
 import { useNavigate } from "react-router-dom";
-import BannerBox from "../components/BannerBox"
+import BannerBox from "../components/BannerBox";
+
+/* -------------------- Constants -------------------- */
+const TOKENS_API = "https://cryptoku-backend-beige.vercel.app/api/tokens";
 
 /* -------------------- Helpers -------------------- */
+const isTokenSupported = (symbol, supportedList) => {
+  if (!symbol || !supportedList?.length) return false;
+
+  const base = symbol.toUpperCase().replace(/(USDT|USDC|USD|BUSD)$/i, "");
+
+  return supportedList.includes(base);
+};
 const formatSymbol = (s) =>
-  s ? s.toUpperCase().replace(/(USDT|USDC|BUSD)$/i, "") : "";
+  s
+    ? s.toUpperCase().replace(/(USDT|USDC|BUSD|USD)$/i, "") // tambahin USD
+    : "";
 
 const formatPrice = (price, currency = "USD") => {
   const n = parseFloat(price);
@@ -30,6 +42,14 @@ const formatPrice = (price, currency = "USD") => {
     currency: "USD",
     maximumFractionDigits: n < 1 ? 8 : 2,
   });
+};
+const getPairParts = (symbol) => {
+  const up = (symbol || "").toUpperCase();
+  const m = up.match(/(USDT|USDC|BUSD|USD)$/);
+  if (!m) return { base: up, quote: "" };
+  const quote = m[1];
+  const base = up.slice(0, -quote.length);
+  return { base, quote };
 };
 
 const useAnimatedNumber = (value, duration = 400) => {
@@ -70,11 +90,18 @@ const formatTime = (ts) => {
 };
 
 /* -------------------- PriceItem -------------------- */
-function PriceItem({ item, previous, amoled, translateForItem = 0, onClick }) {
+function PriceItem({
+  item,
+  previous,
+  amoled,
+  translateForItem = 0,
+  onClick,
+  isSupported,
+}) {
   const change = Number(item.priceChangePercent) || 0;
   const positive = change > 0;
   const negative = change < 0;
-
+  const { base, quote } = getPairParts(item.symbol);
   const last = previous?.price_usd;
   const current = Number(item.price_usd) || 0;
 
@@ -97,7 +124,8 @@ function PriceItem({ item, previous, amoled, translateForItem = 0, onClick }) {
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={isSupported ? onClick : undefined}
+      disabled={!isSupported}
       ref={refFlash}
       style={{
         transform: `translateY(${translateForItem}px)`,
@@ -112,17 +140,25 @@ function PriceItem({ item, previous, amoled, translateForItem = 0, onClick }) {
             : "bg-zinc-900/75 border-zinc-800"
         }
         active:scale-[0.99]
+        ${!isSupported ? "opacity-50 cursor-not-allowed" : ""}
       `}
     >
       <div className="flex items-center justify-between gap-3">
         {/* LEFT: symbol + IDR */}
         <div>
           <div className="text-white font-semibold text-sm">
-            {formatSymbol(item.symbol)}/USDT
+            <div className="text-white font-semibold text-sm">
+              {base}/{quote || "USDT"}
+            </div>
           </div>
           <div className="text-zinc-400 text-xs mt-1">
             {formatPrice(item.price_idr, "IDR")}
           </div>
+          {!isSupported && (
+            <div className="text-[10px] text-amber-400 mt-1">
+              Belum tersedia untuk order di CryptoKu
+            </div>
+          )}
         </div>
 
         {/* MIDDLE: sparkline */}
@@ -137,12 +173,11 @@ function PriceItem({ item, previous, amoled, translateForItem = 0, onClick }) {
               style={{
                 strokeWidth: 2.2,
                 fill: "none",
-                stroke:
-                  positive
-                    ? "rgb(52,211,153)"
-                    : negative
-                    ? "rgb(248,113,113)"
-                    : "rgb(148,163,184)",
+                stroke: positive
+                  ? "rgb(52,211,153)"
+                  : negative
+                  ? "rgb(248,113,113)"
+                  : "rgb(148,163,184)",
               }}
             />
           </Sparklines>
@@ -165,7 +200,10 @@ function PriceItem({ item, previous, amoled, translateForItem = 0, onClick }) {
           >
             {positive && <ArrowUp className="w-3.5 h-3.5" />}
             {negative && <ArrowDown className="w-3.5 h-3.5" />}
-            <span>{positive ? "+" : ""}{change.toFixed(2)}%</span>
+            <span>
+              {positive ? "+" : ""}
+              {change.toFixed(2)}%
+            </span>
           </div>
         </div>
       </div>
@@ -185,6 +223,11 @@ export default function Market() {
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(Date.now());
 
+  // daftar token yang benar-benar dijual (dari /api/tokens)
+  const [supportedTokens, setSupportedTokens] = useState([]);
+  const [tokensLoading, setTokensLoading] = useState(true);
+  const [tokensError, setTokensError] = useState(null);
+
   // Floating header state (match Home)
   const [showHeader, setShowHeader] = useState(true);
   const lastScrollY = useRef(0);
@@ -199,6 +242,42 @@ export default function Market() {
 
   const CACHE_KEY = "market_cache_v1";
   const CACHE_TTL = 10000;
+
+  // Fetch daftar token yang dijual dari backend
+  useEffect(() => {
+    let aborted = false;
+
+    const fetchSupportedTokens = async () => {
+      try {
+        setTokensLoading(true);
+        setTokensError(null);
+
+        const res = await fetch(TOKENS_API);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const json = await res.json();
+        if (!json.success) throw new Error("API tidak success");
+
+        const activeTokens = (json.data || []).filter((t) => t.is_active);
+        if (!aborted) {
+          setSupportedTokens(activeTokens);
+        }
+      } catch (err) {
+        console.error("fetchSupportedTokens error:", err);
+        if (!aborted) {
+          setTokensError("Gagal memuat daftar token yang tersedia.");
+        }
+      } finally {
+        if (!aborted) setTokensLoading(false);
+      }
+    };
+
+    fetchSupportedTokens();
+
+    return () => {
+      aborted = true;
+    };
+  }, []);
 
   const fetchPrices = async (force = false) => {
     setError(null);
@@ -232,10 +311,9 @@ export default function Market() {
         priceChangePercent: Number(x.priceChangePercent) || 0,
         sparkline: Array.from({ length: 16 }, () =>
           Number(
-            (
-              Number(x.price_usd || 0) *
-              (0.98 + Math.random() * 0.04)
-            ).toFixed(6)
+            (Number(x.price_usd || 0) * (0.98 + Math.random() * 0.04)).toFixed(
+              6
+            )
           )
         ),
       }));
@@ -360,6 +438,15 @@ export default function Market() {
     });
   };
 
+  // helper: cek apakah suatu item market tersedia di daftar token jual
+  const isItemSupported = (item) => {
+    const baseSymbol = formatSymbol(item.symbol); // contoh: BTCUSDT -> BTC
+    if (!baseSymbol) return false;
+    return supportedTokens.some(
+      (t) => String(t.symbol).toUpperCase() === baseSymbol
+    );
+  };
+
   return (
     <div
       className={`min-h-screen px-4 pt-16 pb-32 ${
@@ -376,7 +463,11 @@ export default function Market() {
               rounded-b-lg px-5 border
               backdrop-blur-md
               shadow-md
-              ${amoled ? "bg-black/85 border-zinc-900" : "bg-zinc-900/85 border-zinc-800"}
+              ${
+                amoled
+                  ? "bg-black/85 border-zinc-900"
+                  : "bg-zinc-900/85 border-zinc-800"
+              }
             `}
             style={{
               transform: showHeader ? "translateY(0)" : "translateY(-100%)",
@@ -409,6 +500,18 @@ export default function Market() {
         <div className="flex items-center pt-4 justify-between text-[11px] text-zinc-500 mb-3 mt-1">
           <span>Harga Market</span>
           <span>Update: {formatTime(lastUpdated)}</span>
+        </div>
+
+        {/* Info bar token support */}
+        <div className="flex items-center justify-between text-[11px] text-zinc-500 mb-2">
+          <span>Token tersedia di CryptoKu</span>
+          <span>
+            {tokensLoading
+              ? "Memuat..."
+              : tokensError
+              ? "Gagal memuat"
+              : `${supportedTokens.length} token`}
+          </span>
         </div>
 
         {/* Pull-to-refresh indicator */}
@@ -483,22 +586,26 @@ export default function Market() {
 
           {!loading && !error && sorted.length > 0 && (
             <div className="space-y-3">
-              {sorted.map((item, i) => (
-                <PriceItem
-                  key={item.symbol || i}
-                  item={item}
-                  previous={previousPrices.find(
-                    (p) => p.symbol === item.symbol
-                  )}
-                  amoled={amoled}
-                  translateForItem={computeItemTranslate(
-                    i,
-                    total,
-                    baseTranslate
-                  )}
-                  onClick={() => handleSelectToken(item)}
-                />
-              ))}
+              {sorted.map((item, i) => {
+                const isSupported = isItemSupported(item);
+                return (
+                  <PriceItem
+                    key={item.symbol || i}
+                    item={item}
+                    previous={previousPrices.find(
+                      (p) => p.symbol === item.symbol
+                    )}
+                    amoled={amoled}
+                    translateForItem={computeItemTranslate(
+                      i,
+                      total,
+                      baseTranslate
+                    )}
+                    isSupported={isSupported}
+                    onClick={() => handleSelectToken(item)}
+                  />
+                );
+              })}
             </div>
           )}
         </main>

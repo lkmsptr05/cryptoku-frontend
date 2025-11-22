@@ -47,8 +47,7 @@ export default function Home() {
       const sorted = [...prices]
         .filter(
           (t) =>
-            t.priceChangePercent !== undefined &&
-            t.priceChangePercent !== null
+            t.priceChangePercent !== undefined && t.priceChangePercent !== null
         )
         .map((t) => ({
           ...t,
@@ -119,7 +118,11 @@ export default function Home() {
               rounded-b-lg px-5 border
               backdrop-blur-md
               shadow-md
-              ${amoled ? "bg-black/85 border-zinc-900" : "bg-zinc-900/85 border-zinc-800"}
+              ${
+                amoled
+                  ? "bg-black/85 border-zinc-900"
+                  : "bg-zinc-900/85 border-zinc-800"
+              }
             `}
             style={{
               transform: showHeader ? "translateY(0)" : "translateY(-100%)",
@@ -148,7 +151,6 @@ export default function Home() {
           description="Promosi spesial, fee lebih murah, atau info toko kamu bisa tampil di sini."
           accent="emerald"
         />
-
 
         {/* Health + Index */}
         <div className="grid grid-cols-2 gap-3">
@@ -254,9 +256,7 @@ export default function Home() {
                       ) : (
                         <ArrowDown size={14} />
                       )}
-                      <span>
-                        {Math.abs(t.priceChangePercent).toFixed(2)}%
-                      </span>
+                      <span>{Math.abs(t.priceChangePercent).toFixed(2)}%</span>
                     </div>
                   </div>
                 ))}
