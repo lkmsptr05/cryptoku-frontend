@@ -1,0 +1,29 @@
+/* src/index.css - VERSI DIPERBAIKI */
+
+/* 1. Import Poppins (sudah benar) */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;900&display=swap');
+
+@import "tailwindcss";
+
+/* page transition helper: default handled by PageTransition inline styles,
+   but keep this for fallback / utility */
+.page-transition {
+  will-change: opacity;
+}
+
+/* small tweak to make body.dark more predictable for 3rd party components */
+body.dark {
+  background: #000;
+  color: #fff;
+}
+
+/* optional: reduce overscroll bounce background flicker on iOS during pull refresh */
+html, body {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* tune for BottomNav */
+@media (min-width: 1024px) {
+  nav.fixed { display: none; } /* hide mobile nav on large screens if desired */
+}
