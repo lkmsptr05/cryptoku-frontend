@@ -31,7 +31,6 @@ function RouterWrapper() {
           <Route path="/profile" element={<Profile />} />
         </Routes>
       </PageTransition>
-
       <BottomNav />
     </>
   );
