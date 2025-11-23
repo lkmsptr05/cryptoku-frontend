@@ -3,7 +3,7 @@
 // ===============================
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowUp, ArrowDown, ChevronDown } from "lucide-react";
+import { ArrowUp, ArrowDown } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import GlobalHeader from "../components/GlobalHeader";
 import OrderHistoryPopup from "../components/OrderHistoryPopup";
@@ -44,11 +44,18 @@ const SERVICE_FEE_PERCENT = 4; // sudah termasuk Midtrans
 
 const MIN_PURCHASE_IDR = 1000; // minimal pembelian tetap (Rp)
 
-const MIN_TOKEN_RECEIVED = 0.03; // minimal token yang "pantas" dikirim (contoh 0.1 USDT/USDC)
-
 // helper format pair
 const formatPair = (symbol) =>
   symbol?.toUpperCase().replace(/(USDT|USDC|USD)$/, "/$1") || "-";
+
+// normalisasi network key untuk endpoint gas
+const mapNetworkKeyForGas = (key = "") => {
+  const k = key.toLowerCase();
+
+  if (k === "eth") return "ethereum"; // backend maunya 'ethereum'
+
+  return key;
+};
 
 const formatUsdPrice = (price) => {
   const n = Number(price);
@@ -321,59 +328,72 @@ export default function Order() {
   const gasEnabled =
     !!token && isSupported && !!selectedBackendToken && isValidWallet;
 
+  const rawNetworkKey = selectedBackendToken?.network_key || "";
+
   const {
     data: gasData,
     loading: gasLoading,
     errorMsg: gasError,
   } = useGasEstimate({
-    networkKey: selectedBackendToken ? selectedBackendToken.network_key : "",
+    networkKey: mapNetworkKeyForGas(rawNetworkKey),
     to: toAddress,
     tokenAddress:
       selectedBackendToken && selectedBackendToken.contract_address
         ? selectedBackendToken.contract_address
-        : undefined, // native coin -> undefined (tokenAddress dihapus)
+        : undefined,
     enabled: gasEnabled,
   });
 
   const isNativeToken =
     selectedBackendToken && !selectedBackendToken.contract_address;
 
+  // nilai numeric dari amountIdr (dalam rupiah)
+  const amountIdrNumber = amountIdr ? Number(amountIdr) : 0;
+
+  // tampilan "Rp 1.000"
+  const formattedAmountIdr = amountIdrNumber
+    ? `Rp ${amountIdrNumber.toLocaleString("id-ID")}`
+    : "";
+
   // KONVERSI & PERHITUNGAN: IDR -> USD -> potong fee & gas -> token diterima
   const amountUsd =
-    amountIdr && token?.price_idr
-      ? Number(amountIdr) / Number(token.price_idr)
+    amountIdrNumber && token?.price_idr && token?.price_usd
+      ? (amountIdrNumber * Number(token.price_usd)) / Number(token.price_idr)
       : 0;
 
   const serviceFeeUsd = amountUsd ? (amountUsd * SERVICE_FEE_PERCENT) / 100 : 0;
 
-  const serviceFeeIdr = amountIdr
-    ? (Number(amountIdr) * SERVICE_FEE_PERCENT) / 100
+  const serviceFeeIdr = amountIdrNumber
+    ? (amountIdrNumber * SERVICE_FEE_PERCENT) / 100
     : 0;
 
   const gasFeeUsd = gasData?.totalFeeUSD || 0;
+  const gasFeeIdr = gasData?.totalFeeIDR || 0;
+  const serviceFeeRate = SERVICE_FEE_PERCENT / 100;
 
   const usdAfterFee = Math.max(amountUsd - serviceFeeUsd - gasFeeUsd, 0);
 
   const estimatedToken =
     usdAfterFee && token?.price_usd ? usdAfterFee / Number(token.price_usd) : 0;
 
-  // Guard A: minimal pembelian IDR
-  const meetsStaticMin =
-    Number(amountIdr) > 0 ? Number(amountIdr) >= MIN_PURCHASE_IDR : true;
+  // Minimum dinamis berdasarkan gas fee + service fee
+  const dynamicMinIdr =
+    gasData && !gasError && gasFeeIdr > MIN_PURCHASE_IDR
+      ? Math.ceil(gasFeeIdr / (1 - serviceFeeRate)) + 1
+      : MIN_PURCHASE_IDR;
 
-  // Guard B: minimal token yang diterima
-  const isTokenTooSmall =
-    estimatedToken > 0 ? estimatedToken < MIN_TOKEN_RECEIVED : false;
+  // Cek apakah amount sudah memenuhi minimum
+  const meetsDynamicMin =
+    amountIdrNumber > 0 ? amountIdrNumber >= dynamicMinIdr : true;
 
   const canSubmitBuy =
     gasEnabled &&
     !gasLoading &&
     !gasError &&
     isValidWallet &&
-    Number(amountIdr) > 0 &&
+    amountIdrNumber > 0 &&
     estimatedToken > 0 &&
-    meetsStaticMin &&
-    !isTokenTooSmall;
+    meetsDynamicMin;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -824,27 +844,30 @@ export default function Order() {
                       Amount (IDR)
                     </label>
                     <input
-                      type="number"
-                      min="0"
-                      step="1000"
-                      placeholder="100000"
-                      value={amountIdr}
-                      onChange={(e) => setAmountIdr(e.target.value)}
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="Rp 100.000"
+                      value={formattedAmountIdr}
+                      onChange={(e) => {
+                        // Ambil hanya digit 0–9
+                        const raw = e.target.value.replace(/[^0-9]/g, "");
+                        setAmountIdr(raw);
+                      }}
                       className="w-full mt-1 bg-black/40 border border-zinc-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500"
                     />
 
                     {/* info minimal pembelian fix */}
                     <p className="text-[11px] text-zinc-500 mt-1">
-                      Minimum pembelian:{" "}
+                      Minimum pembelian untuk jaringan ini:{" "}
                       <span className="font-medium">
-                        Rp {MIN_PURCHASE_IDR.toLocaleString("id-ID")}
+                        Rp {dynamicMinIdr.toLocaleString("id-ID")}
                       </span>
                     </p>
 
-                    {/* warning kalau di bawah minimum IDR */}
-                    {Number(amountIdr) > 0 && !meetsStaticMin && (
+                    {Number(amountIdr) > 0 && !meetsDynamicMin && (
                       <p className="text-[11px] text-amber-400 mt-1">
-                        Nominal masih di bawah minimum pembelian.
+                        Nominal masih di bawah minimum. Minimal harus lebih
+                        tinggi dari estimasi gas fee dan biaya layanan.
                       </p>
                     )}
                   </div>
@@ -861,13 +884,6 @@ export default function Order() {
                       placeholder="Auto calculate"
                       className="w-full mt-1 bg-black/20 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-300"
                     />
-
-                    {estimatedToken > 0 && isTokenTooSmall && (
-                      <p className="text-[11px] text-amber-400 mt-1">
-                        Nominal terlalu kecil dibanding biaya jaringan. Coba
-                        tambah nominal atau tunggu gas fee turun.
-                      </p>
-                    )}
                   </div>
 
                   {/* Estimasi Gas + Service Fee */}
@@ -875,27 +891,28 @@ export default function Order() {
                     <p className="text-zinc-400 text-xs uppercase tracking-wider">
                       Estimasi Gas Fee
                     </p>
-
                     {!toAddress && (
                       <p className="text-zinc-500 text-xs">
                         Masukkan wallet penerima untuk melihat estimasi gas.
                       </p>
                     )}
-
-                    {gasEnabled && gasLoading && (
+                    {gasEnabled && !gasData && gasLoading && (
                       <p className="text-zinc-500 text-xs">
                         Menghitung estimasi gas…
                       </p>
                     )}
-
                     {gasEnabled && gasError && (
                       <p className="text-red-400 text-xs">
                         Gagal mengambil estimasi gas: {gasError}
                       </p>
                     )}
 
-                    {gasEnabled && gasData && !gasLoading && !gasError && (
-                      <>
+                    {gasEnabled && gasData && !gasError && (
+                      <div
+                        className={`space-y-2 ${
+                          gasLoading ? "animate-pulse" : ""
+                        }`}
+                      >
                         <div className="flex justify-between">
                           <span className="text-zinc-400">Jaringan</span>
                           <span className="font-medium">
@@ -906,6 +923,7 @@ export default function Order() {
                               : "-"}
                           </span>
                         </div>
+
                         <div className="flex justify-between">
                           <span className="text-zinc-400">Perkiraan</span>
                           <span className="font-medium">
@@ -927,7 +945,7 @@ export default function Order() {
                             {SERVICE_FEE_PERCENT}%
                           </span>
                         </div>
-                      </>
+                      </div>
                     )}
                   </div>
 
@@ -1010,7 +1028,7 @@ export default function Order() {
                     <div className="flex justify-between">
                       <span className="text-zinc-400">Nominal (IDR)</span>
                       <span className="font-medium">
-                        Rp {Number(amountIdr || 0).toLocaleString("id-ID")}
+                        Rp {amountIdrNumber.toLocaleString("id-ID")}
                       </span>
                     </div>
 
