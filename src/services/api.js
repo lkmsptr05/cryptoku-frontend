@@ -61,7 +61,7 @@ export async function getAllPrices() {
 export async function getPrice(symbol) {
   try {
     // Asumsi: Jika Anda ingin mengambil harga tunggal, Anda tetap menggunakan endpoint /api/price/:symbol
-    const response = await fetch(`${API_BASE_URL}/price/${symbol}`);
+    const response = await fetch(`${API_BASE_URL}/prices/${symbol}`);
     const data = await response.json();
 
     if (!response.ok || data.error) {
@@ -144,4 +144,16 @@ export async function getGas(network_key, to, tokenAddress = null, amount) {
     console.error("Error (getGas):", error);
     throw error;
   }
+}
+
+export async function getSparkline(symbol) {
+  const res = await fetch(`${API_BASE_URL}/prices/${symbol}/sparkline`);
+
+  if (!res.ok) {
+    throw new Error(`Sparkline HTTP ${res.status}`);
+  }
+
+  const json = await res.json();
+  // backend kamu kirim { data: { symbol, points, timestamps } }
+  return json.data || json;
 }

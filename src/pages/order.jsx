@@ -695,7 +695,7 @@ export default function Order() {
                               )} · ${
                                 selectedBackendToken.contract_address
                                   ? baseSymbol
-                                  : "Native"
+                                  : selectedBackendToken.symbol
                               }`
                             : "Pilih network"}
                         </span>
@@ -741,7 +741,7 @@ export default function Order() {
                             const isActive = v.id === selectedTokenId;
                             const label = `${prettyNetworkName(
                               v.network_key
-                            )} · ${v.contract_address ? baseSymbol : "Native"}`;
+                            )} · ${v.contract_address ? baseSymbol : v.symbol}`;
 
                             return (
                               <button

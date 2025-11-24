@@ -2,9 +2,10 @@
 // src/pages/Market.jsx
 // ===============================
 import React, { useEffect, useRef, useState } from "react";
-import { getAllPrices } from "../services/api";
+import { getAllPrices, getPrice } from "../services/api";
 import { ArrowUp, ArrowDown } from "lucide-react";
-import { Sparklines, SparklinesLine } from "react-sparklines";
+import SparklineMini from "../components/SparklineMini";
+
 import { useTheme } from "../contexts/ThemeContext";
 import GlobalHeader from "../components/GlobalHeader";
 import { useNavigate } from "react-router-dom";
@@ -14,13 +15,7 @@ import BannerBox from "../components/BannerBox";
 const TOKENS_API = "https://cryptoku-backend-beige.vercel.app/api/tokens";
 
 /* -------------------- Helpers -------------------- */
-const isTokenSupported = (symbol, supportedList) => {
-  if (!symbol || !supportedList?.length) return false;
 
-  const base = symbol.toUpperCase().replace(/(USDT|USDC|USD|BUSD)$/i, "");
-
-  return supportedList.includes(base);
-};
 const formatSymbol = (s) =>
   s
     ? s.toUpperCase().replace(/(USDT|USDC|BUSD|USD)$/i, "") // tambahin USD
@@ -146,42 +141,33 @@ function PriceItem({
       <div className="flex items-center justify-between gap-3">
         {/* LEFT: symbol + IDR */}
         <div>
-          <div className="text-white font-semibold text-sm">
+          <div className="min-w-[110px]">
             <div className="text-white font-semibold text-sm">
               {base}/{quote || "USDT"}
             </div>
-          </div>
-          <div className="text-zinc-400 text-xs mt-1">
-            {formatPrice(item.price_idr, "IDR")}
-          </div>
-          {!isSupported && (
-            <div className="text-[10px] text-amber-400 mt-1">
-              Belum tersedia untuk order di CryptoKu
+
+            <div className="text-zinc-400 text-xs mt-1">
+              {formatPrice(item.price_idr, "IDR")}
             </div>
-          )}
+
+            {/* placeholder agar tinggi stabil */}
+            <div className="text-[10px] mt-1 min-h-[14px]">
+              {!isSupported && (
+                <div className="absolute bottom-2 left-2 text-[10px] px-2 py-[2px] rounded-full bg-amber-500/20 text-amber-400">
+                  Coming Soon
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* MIDDLE: sparkline */}
-        <div className="w-28 sm:w-32">
-          <Sparklines
-            data={item.sparkline || []}
-            width={100}
-            height={30}
-            margin={4}
-          >
-            <SparklinesLine
-              style={{
-                strokeWidth: 2.2,
-                fill: "none",
-                stroke: positive
-                  ? "rgb(52,211,153)"
-                  : negative
-                  ? "rgb(248,113,113)"
-                  : "rgb(148,163,184)",
-              }}
-            />
-          </Sparklines>
-        </div>
+        {/* MIDDLE: sparkline */}
+        <SparklineMini
+          symbol={item.symbol}
+          positive={positive}
+          negative={negative}
+        />
 
         {/* RIGHT: USD + % */}
         <div className="text-right min-w-[90px]">
@@ -242,7 +228,52 @@ export default function Market() {
 
   const CACHE_KEY = "market_cache_v1";
   const CACHE_TTL = 10000;
+  const [ethMovement, setEthMovement] = useState("..."); // State untuk menyimpan hasil
+  const [bannerLoading, setBannerLoading] = useState(true);
 
+  useEffect(() => {
+    // Fungsi untuk mengambil data dan update state
+    const fetchEthMovement = async () => {
+      try {
+        setBannerLoading(true);
+        // Anda tidak menggunakan 'priceMovement' dari getPrice di title Anda,
+        // jadi fokus pada 'change' dari 'item'.
+        const priceMovement = await getPrice("ethusdt");
+
+        // Pastikan 'item' tersedia di sini. Asumsi 'item' adalah object data API.
+        const change = Number(priceMovement.priceChangePercent) || 0;
+
+        let movementStatus = "";
+
+        if (change > 0) {
+          // Jika nilai positif (misalnya 3.2), anggap NAIK
+          movementStatus = `naik +${change.toFixed(2)}`;
+        } else if (change < 0) {
+          // Jika nilai negatif (misalnya -3.2), anggap TURUN
+          movementStatus = `turun ${change}`;
+        } else {
+          // Jika nilai 0
+          movementStatus = `stabil ${change}`;
+        }
+
+        // Simpan status pergerakan ini ke state
+        // Anda mungkin perlu mengganti setEthMovement menjadi setEthMovementStatus
+        setEthMovement(movementStatus);
+      } catch (error) {
+        console.error("Gagal mengambil data ETH:", error);
+        setEthMovement("perubahan tidak diketahui");
+      } finally {
+        setBannerLoading(false);
+      }
+    };
+
+    fetchEthMovement();
+  }, []); // Tambahkan [item] ke dependency array jika 'item' adalah prop
+
+  // Tampilkan loading state atau data yang sudah didapat
+  const titleText = loading
+    ? "ETH bergerak..."
+    : `ETH bergerak ${ethMovement} hari ini`;
   // Fetch daftar token yang dijual dari backend
   useEffect(() => {
     let aborted = false;
@@ -309,13 +340,7 @@ export default function Market() {
         price_usd: Number(x.price_usd) || 0,
         price_idr: Number(x.price_idr) || 0,
         priceChangePercent: Number(x.priceChangePercent) || 0,
-        sparkline: Array.from({ length: 16 }, () =>
-          Number(
-            (Number(x.price_usd || 0) * (0.98 + Math.random() * 0.04)).toFixed(
-              6
-            )
-          )
-        ),
+        // sparkline akan diambil oleh SparklineMini dari backend
       }));
 
       const save = {
@@ -344,7 +369,7 @@ export default function Market() {
 
   useEffect(() => {
     fetchPrices();
-    const id = setInterval(() => fetchPrices(true), 10000);
+    const id = setInterval(() => fetchPrices(true), 20000);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -398,9 +423,21 @@ export default function Market() {
     return Math.round(base * sensitivity * lengthFactor);
   };
 
-  const sorted = prices
+  // urutkan dulu berdasarkan price_usd desc
+  const sortedByPrice = prices
     .slice()
     .sort((a, b) => Number(b.price_usd) - Number(a.price_usd));
+
+  // pisahkan berdasarkan status dari backend
+  const availableItems = sortedByPrice.filter(
+    (item) => item.status === "available"
+  );
+  const unavailableItems = sortedByPrice.filter(
+    (item) => item.status !== "available"
+  );
+
+  // gabungkan: available dulu, lalu yang coming soon/unavailable
+  const sorted = [...availableItems, ...unavailableItems];
   const total = sorted.length;
 
   /* -------------------- Floating header scroll logic (match Home) -------------------- */
@@ -491,7 +528,8 @@ export default function Market() {
       <div className="max-w-md pt-2 mx-auto">
         <BannerBox
           label="Market Update"
-          title="BTC bergerak 2.5% hari ini"
+          // Gunakan nilai dari state yang sudah diselesaikan
+          title={titleText}
           description="Pantau market dan ambil peluang trading terbaik."
           accent="blue"
         />
@@ -587,7 +625,12 @@ export default function Market() {
           {!loading && !error && sorted.length > 0 && (
             <div className="space-y-3">
               {sorted.map((item, i) => {
-                const isSupported = isItemSupported(item);
+                // hanya dianggap "bisa diorder" kalau:
+                // - status dari backend = "available"
+                // - dan ada di daftar token jual (/api/tokens)
+                const isSupported =
+                  item.status === "available" && isItemSupported(item);
+
                 return (
                   <PriceItem
                     key={item.symbol || i}
