@@ -7,14 +7,34 @@ import { getSystemHealth, getAllPrices } from "../services/api";
 import SystemHealthPopup from "../components/SystemHealthPopup";
 import { useTheme } from "../contexts/ThemeContext";
 import GlobalHeader from "../components/GlobalHeader";
-import BannerBox from "../components/BannerBox";
+// import BannerBox from "../components/BannerBox"; // sudah tidak dipakai
+import { useNavigate } from "react-router-dom";
 
-export default function Home() {
+const API_BASE = "https://cryptoku-backend-beige.vercel.app";
+
+const formatIDR = (n) => {
+  const num = Number(n);
+  if (!Number.isFinite(num)) return "Rp0";
+  return num.toLocaleString("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+  });
+};
+
+// Home sekarang menerima telegramUser dari App.jsx
+export default function Home({ telegramUser }) {
   const { amoled, toggleTheme } = useTheme();
+  const navigate = useNavigate();
 
   const [health, setHealth] = useState([]);
   const [showPopup, setShowPopup] = useState(false);
   const [gainers, setGainers] = useState([]);
+
+  // saldo
+  const [balance, setBalance] = useState(0);
+  const [balanceLoading, setBalanceLoading] = useState(true);
+  const [balanceError, setBalanceError] = useState(null);
 
   // =============================
   // FLOATING HEADER STATE
@@ -42,9 +62,10 @@ export default function Home() {
   // =============================
   const loadTopGainers = async () => {
     try {
-      const prices = await getAllPrices();
+      const res = await getAllPrices();
+      const arr = Array.isArray(res) ? res : res?.data || [];
 
-      const sorted = [...prices]
+      const sorted = [...arr]
         .filter(
           (t) =>
             t.priceChangePercent !== undefined && t.priceChangePercent !== null
@@ -70,6 +91,47 @@ export default function Home() {
     refreshHomeData();
     loadTopGainers();
   }, []);
+
+  // =============================
+  // LOAD SALDO USER
+  // =============================
+  useEffect(() => {
+    // kalau belum ada telegramUser (misal dev di browser biasa)
+    if (!telegramUser?.id) {
+      setBalanceLoading(false);
+      return;
+    }
+
+    const load = async () => {
+      try {
+        setBalanceLoading(true);
+        setBalanceError(null);
+
+        // versi simple: kirim user_id via query
+        const res = await fetch(
+          `${API_BASE}/api/me/balance?user_id=${telegramUser.id}`
+        );
+        const json = await res.json();
+
+        if (!res.ok || !json?.success) {
+          console.error("Get balance error:", json);
+          setBalanceError("Gagal memuat saldo");
+          setBalance(0);
+          return;
+        }
+
+        setBalance(json.data?.balance_available ?? 0);
+      } catch (err) {
+        console.error("Fetch balance error:", err);
+        setBalanceError("Gagal menghubungi server");
+        setBalance(0);
+      } finally {
+        setBalanceLoading(false);
+      }
+    };
+
+    load();
+  }, [telegramUser?.id]);
 
   // =============================
   // SCROLL LISTENER UNTUK FLOATING HEADER
@@ -101,6 +163,24 @@ export default function Home() {
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  const name =
+    telegramUser?.first_name || telegramUser?.username || "Pengguna CryptoKu";
+
+  const username = telegramUser?.username ? `@${telegramUser.username}` : null;
+
+  const handleTopup = () => {
+    // nanti bisa diarahkan ke halaman/topup flow
+    console.log("Top Up clicked");
+    // contoh:
+    // navigate("/profile", { state: { section: "topup" } });
+  };
+
+  const handleHistory = () => {
+    console.log("History saldo clicked");
+    // contoh:
+    // navigate("/profile", { state: { section: "balance-history" } });
+  };
 
   return (
     <div
@@ -144,13 +224,92 @@ export default function Home() {
           PAGE CONTENT
       ============================ */}
       <div className="max-w-md mx-auto space-y-5">
-        {/* Banner */}
-        <BannerBox
-          label="Banner Toko"
-          title="Selamat datang di CryptoKu"
-          description="Promosi spesial, fee lebih murah, atau info toko kamu bisa tampil di sini."
-          accent="emerald"
-        />
+        {/* ====== BANNER: NAMA + SALDO + TOMBOL ====== */}
+        <section className="mt-6">
+          <div
+            className={`
+              w-full rounded-3xl p-4 border
+              shadow-md
+              ${
+                amoled
+                  ? "bg-black/60 border-zinc-800"
+                  : "bg-gradient-to-br from-zinc-900/90 via-zinc-900/70 to-emerald-900/40 border-zinc-800/80"
+              }
+            `}
+          >
+            {/* baris atas: salam + username + avatar */}
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div>
+                <p className="text-[11px] text-zinc-400">Selamat datang,</p>
+                <p className="text-sm font-semibold text-white">{name}</p>
+                {username && (
+                  <p className="text-[11px] text-zinc-500 mt-[2px]">
+                    {username}
+                  </p>
+                )}
+              </div>
+
+              {telegramUser?.photo_url && (
+                <img
+                  src={telegramUser.photo_url}
+                  alt="Avatar"
+                  className="w-10 h-10 rounded-full border border-zinc-700 object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              )}
+            </div>
+
+            {/* saldo */}
+            <div className="mt-2 mb-3">
+              <p className="text-[11px] text-zinc-400">Saldo IDR</p>
+              <p className="text-xl font-bold tracking-tight mt-1">
+                {balanceLoading ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span className="w-4 h-4 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
+                    <span className="text-zinc-400 text-[13px]">
+                      Memuat saldo...
+                    </span>
+                  </span>
+                ) : (
+                  formatIDR(balance)
+                )}
+              </p>
+              {balanceError && (
+                <p className="text-[11px] text-amber-400 mt-1">
+                  {balanceError}
+                </p>
+              )}
+            </div>
+
+            {/* tombol */}
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                type="button"
+                onClick={handleTopup}
+                className="flex-1 py-2 rounded-2xl text-xs font-semibold 
+                  bg-emerald-500 text-black
+                  hover:bg-emerald-400
+                  active:scale-[0.97]
+                  transition-transform duration-150"
+              >
+                Top Up Saldo
+              </button>
+
+              <button
+                type="button"
+                onClick={handleHistory}
+                className="flex-1 py-2 rounded-2xl text-xs font-medium 
+                  border border-zinc-700
+                  text-zinc-200 bg-zinc-900/60
+                  hover:bg-zinc-800
+                  active:scale-[0.97]
+                  transition-transform duration-150"
+              >
+                Riwayat Saldo
+              </button>
+            </div>
+          </div>
+        </section>
 
         {/* Health + Index */}
         <div className="grid grid-cols-2 gap-3">
