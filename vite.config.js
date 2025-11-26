@@ -23,11 +23,11 @@ export default defineConfig({
       ".ngrok.app", // jaga-jaga
       ".ngrok-free.dev",
     ],
-    proxy: {
-      "/api": {
-        target: "https://cryptoku-backend-beige.vercel.app/api",
-        changeOrigin: true,
-      },
-    },
+    // proxy: {
+    //   "/api": {
+    //     target: "https://cryptoku-backend-beige.vercel.app/api",
+    //     changeOrigin: true,
+    //   },
+    // },
   },
 });
