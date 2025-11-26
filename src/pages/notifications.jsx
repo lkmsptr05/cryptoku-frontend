@@ -5,59 +5,25 @@ import GlobalHeader from "../components/GlobalHeader";
 import { useTheme } from "../contexts/ThemeContext";
 import { NOTIFICATION_STYLES } from "../constant/notificationStyles";
 import RewardConfetti from "../components/RewardConfetti";
+import useNotifications from "../hooks/useNotifications";
 
 export default function NotificationsPage() {
   const navigate = useNavigate();
   const { theme } = useTheme?.() || { theme: "dark" };
 
-  const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState([]);
-  const [error, setError] = useState("");
+  const { items, loading, error, unreadCount, markAsRead, markAllAsRead } =
+    useNotifications();
+
   const [selected, setSelected] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [showRewardFX, setShowRewardFX] = useState(false);
 
   const isAmoled = theme === "amoled";
 
-  useEffect(() => {
-    const run = async () => {
-      try {
-        setLoading(true);
-        setError("");
-
-        const tgWebApp = window.Telegram?.WebApp;
-        const initData = tgWebApp?.initData || "";
-
-        const res = await fetch("/api/notifications", {
-          headers: {
-            "x-telegram-init-data": initData,
-          },
-        });
-
-        const json = await res.json().catch(() => ({}));
-        console.log("Notifications fetch:", res, json);
-
-        if (!res.ok || json.success === false) {
-          throw new Error(json.message || "Gagal mengambil notifikasi");
-        }
-
-        setItems(json.data || []);
-      } catch (err) {
-        console.error("[Notifications] error:", err);
-        setError(err.message || "Gagal memuat notifikasi");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    run();
-  }, []);
-
-  const unreadCount = items.filter((n) => !n.is_read).length;
-
   const handleClickNotification = async (notif) => {
     setSelected(notif);
     setIsDetailOpen(true);
+
     if (notif.type === "reward") {
       setShowRewardFX(true);
 
@@ -66,25 +32,12 @@ export default function NotificationsPage() {
         window.Telegram.WebApp.HapticFeedback.impactOccurred("heavy");
       }
 
-      // matiin lagi setelah 1.5 detik
       setTimeout(() => setShowRewardFX(false), 1500);
     }
+
     if (!notif.is_read) {
       try {
-        // optimistic UI
-        setItems((prev) =>
-          prev.map((n) => (n.id === notif.id ? { ...n, is_read: true } : n))
-        );
-
-        const tgWebApp = window.Telegram?.WebApp;
-        const initData = tgWebApp?.initData || "";
-
-        await fetch(`/api/notifications/${notif.id}/read`, {
-          method: "PATCH",
-          headers: {
-            "x-telegram-init-data": initData,
-          },
-        });
+        await markAsRead(notif.id);
       } catch (err) {
         console.error("Mark read failed:", err);
       }
@@ -100,24 +53,13 @@ export default function NotificationsPage() {
       const t = setTimeout(() => {
         setSelected(null);
       }, 150);
-
       return () => clearTimeout(t);
     }
   }, [isDetailOpen, selected]);
 
   const handleMarkAllRead = async () => {
     try {
-      setItems((prev) => prev.map((n) => ({ ...n, is_read: true })));
-
-      const tgWebApp = window.Telegram?.WebApp;
-      const initData = tgWebApp?.initData || "";
-
-      await fetch("/api/notifications/read-all", {
-        method: "PATCH",
-        headers: {
-          "x-telegram-init-data": initData,
-        },
-      });
+      await markAllAsRead();
     } catch (err) {
       console.error("Mark all read failed:", err);
     }
@@ -205,7 +147,7 @@ export default function NotificationsPage() {
             {items.map((n) => {
               const style = NOTIFICATION_STYLES[n.type] || {
                 label: n.type || "Notifikasi",
-                icon: "🔔",
+                icon: null,
                 pillBg: "bg-zinc-700/40",
                 pillText: "text-zinc-200",
                 pillBorder: "border border-zinc-600/60",
@@ -323,21 +265,23 @@ export default function NotificationsPage() {
             </div>
 
             <div className="max-h-[60vh] overflow-y-auto pr-1 space-y-3">
-              <div className="flex items-center gap-2 text-[11px] text-zinc-400">
-                <span>
-                  {NOTIFICATION_STYLES[selected.type]?.style && (
-                    <style.icon
-                      className="w-4 h-4 text-zinc-100"
-                      strokeWidth={2}
-                    />
-                  )}
-                </span>
-                {/* <span className="font-medium">
-                  {NOTIFICATION_STYLES[selected.type]?.label ||
-                    selected.type ||
-                    "Notifikasi"}
-                </span> */}
-              </div>
+              {(() => {
+                const style = NOTIFICATION_STYLES[selected.type] || {};
+                const DetailIcon = style.icon;
+                return (
+                  <div className="flex items-center gap-2 text-[11px] text-zinc-400">
+                    {DetailIcon && (
+                      <DetailIcon
+                        className="w-4 h-4 text-zinc-100"
+                        strokeWidth={2}
+                      />
+                    )}
+                    <span className="font-medium">
+                      {style.label || selected.type || "Notifikasi"}
+                    </span>
+                  </div>
+                );
+              })()}
 
               <div className="text-sm font-semibold text-zinc-50">
                 {selected.title}
@@ -359,6 +303,7 @@ export default function NotificationsPage() {
           </div>
         </div>
       )}
+
       <RewardConfetti show={showRewardFX} />
     </div>
   );

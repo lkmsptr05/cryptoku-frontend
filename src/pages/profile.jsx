@@ -5,6 +5,7 @@ import BannerBox from "../components/BannerBox";
 import { getMe } from "../services/api";
 import { useNavigate } from "react-router-dom";
 import useNotificationsBadge from "../hooks/useNotificationsBadge";
+import useMe from "../hooks/useMe";
 
 export default function Profile() {
   const { amoled, toggleTheme } = useTheme();
@@ -12,10 +13,6 @@ export default function Profile() {
   const { unreadCount } = useNotificationsBadge();
   const [showHeader, setShowHeader] = useState(true);
   const lastScrollY = useRef(0);
-
-  const [me, setMe] = useState(null); // { user, balance, wallets }
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
   // Scroll behavior (optional, bisa sama kayak Home)
   useEffect(() => {
@@ -33,34 +30,7 @@ export default function Profile() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Fetch profile data
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchMe() {
-      try {
-        setLoading(true);
-        setError("");
-        const data = await getMe(); // { user, balance, wallets }
-        if (!cancelled) {
-          setMe(data);
-        }
-      } catch (err) {
-        console.error("Profile getMe error:", err);
-        if (!cancelled) {
-          setError(err.message || "Gagal memuat profil.");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    fetchMe();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
+  const { me, loading, error } = useMe();
   const bgClass = amoled
     ? "bg-black"
     : "bg-gradient-to-b from-zinc-900 to-black";

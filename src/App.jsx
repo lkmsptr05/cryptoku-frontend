@@ -5,6 +5,7 @@ import Home from "./pages/home";
 import Order from "./pages/order";
 import Market from "./pages/market";
 import Profile from "./pages/profile";
+import Activity from "./pages/activity";
 import NotificationsPage from "./pages/notifications";
 import BalanceHistoryPage from "./pages/balance-history.jsx";
 
@@ -12,6 +13,7 @@ import BottomNav from "./components/BottomNav";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import useTelegramAuth from "./hooks/useTelegramAuth";
 import { API_BASE_URL } from "./config/api";
+import { Toaster } from "react-hot-toast";
 
 /* -------------------- Page Transition (simple fade) -------------------- */
 function PageTransition({ children }) {
@@ -33,6 +35,7 @@ function RouterWrapper({ telegramUser, initData }) {
   return (
     <>
       <PageTransition key={location.pathname}>
+        <Toaster position="top-center" />
         <Routes location={location}>
           <Route
             path="/"
@@ -43,14 +46,20 @@ function RouterWrapper({ telegramUser, initData }) {
             element={<Market telegramUser={telegramUser} initData={initData} />}
           />
           <Route
-            path="/order"
-            element={<Order telegramUser={telegramUser} initData={initData} />}
+            path="/activity"
+            element={
+              <Activity telegramUser={telegramUser} initData={initData} />
+            }
           />
           <Route
             path="/profile"
             element={
               <Profile telegramUser={telegramUser} initData={initData} />
             }
+          />
+          <Route
+            path="/order/:symbol"
+            element={<Order telegramUser={telegramUser} initData={initData} />}
           />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/balance/history" element={<BalanceHistoryPage />} />

@@ -2,18 +2,19 @@
 // src/pages/Order.jsx
 // ===============================
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowUp, ArrowDown } from "lucide-react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { ArrowUp, ArrowDown, ArrowLeft } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 import GlobalHeader from "../components/GlobalHeader";
-import OrderHistoryPopup from "../components/OrderHistoryPopup";
 import BannerBox from "../components/BannerBox";
 import { submitBuyOrder } from "../services/api";
 import useNotificationsBadge from "../hooks/useNotificationsBadge";
 import { API_BASE_URL } from "../config/api";
+import { useAllPrices } from "../hooks/usePrices";
+import useTelegramAuth from "../hooks/useTelegramAuth";
+import useMyBalance from "../hooks/useMyBalance";
 
 const SERVICE_FEE_PERCENT = 4; // sudah termasuk Midtrans
-
 const MIN_PURCHASE_IDR = 1000; // minimal pembelian tetap (Rp)
 
 // helper format pair
@@ -23,9 +24,7 @@ const formatPair = (symbol) =>
 // normalisasi network key untuk endpoint gas
 const mapNetworkKeyForGas = (key = "") => {
   const k = key.toLowerCase();
-
   if (k === "eth") return "ethereum"; // backend maunya 'ethereum'
-
   return key;
 };
 
@@ -33,14 +32,11 @@ const formatUsdPrice = (price) => {
   const n = Number(price);
   if (!Number.isFinite(n)) return "0";
 
-  // Kalau tepat 1 → tanpa desimal
   if (Math.abs(n - 1) < 0.000001) {
     return "1";
   }
 
-  // Selain itu → truncate ke 3 desimal
   const truncated = Math.trunc(n * 1000) / 1000;
-
   return truncated.toFixed(3);
 };
 
@@ -152,23 +148,42 @@ const formatUsdFee = (usd) => {
 export default function Order() {
   const { amoled, toggleTheme } = useTheme();
   const { state } = useLocation();
+  const { symbol } = useParams();
   const navigate = useNavigate();
   const { unreadCount } = useNotificationsBadge();
-  const token = state?.token || null;
+
+  // harga global dari hook (buat pair dropdown & fallback token)
+  const { prices: allPrices } = useAllPrices();
+
+  // auth + saldo
+  const { user } = useTelegramAuth();
+  const { balance: availableBalanceRaw, loading: balanceLoading } =
+    useMyBalance(user?.id);
+  const availableBalanceNumber = Number(availableBalanceRaw || 0);
+
+  const tokenFromState = state?.token || null;
+  const tokenFromPrices = useMemo(
+    () => allPrices.find((p) => p.symbol === symbol),
+    [allPrices, symbol]
+  );
+
+  const token = tokenFromState || tokenFromPrices || null;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [lastOrder, setLastOrder] = useState(null);
 
-  // dropdown state
+  // dropdown state (network)
   const [isNetworkDropdownOpen, setIsNetworkDropdownOpen] = useState(false);
   const networkDropdownRef = useRef(null);
+
+  // dropdown state (pair selector)
+  const [isPairDropdownOpen, setIsPairDropdownOpen] = useState(false);
+  const pairDropdownRef = useRef(null);
 
   // floating header state
   const [showHeader, setShowHeader] = useState(true);
   const lastScrollY = useRef(0);
-
-  const [showHistory, setShowHistory] = useState(false);
 
   // daftar token yang benar-benar dijual
   const [supportedTokens, setSupportedTokens] = useState([]);
@@ -180,8 +195,6 @@ export default function Order() {
 
   // input wallet penerima
   const [toAddress, setToAddress] = useState("");
-
-  // error validasi wallet
   const [walletError, setWalletError] = useState("");
 
   // input amount IDR
@@ -215,7 +228,7 @@ export default function Order() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Dropdown
+  // click outside network dropdown
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -235,7 +248,27 @@ export default function Order() {
     };
   }, [isNetworkDropdownOpen]);
 
-  // fetch daftar token yang dijual
+  // click outside pair dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        pairDropdownRef.current &&
+        !pairDropdownRef.current.contains(event.target)
+      ) {
+        setIsPairDropdownOpen(false);
+      }
+    };
+
+    if (isPairDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isPairDropdownOpen]);
+
+  // fetch daftar token yang dijual (backend)
   useEffect(() => {
     let aborted = false;
 
@@ -285,6 +318,12 @@ export default function Order() {
   // apakah token ini support di CryptoKu (minimal ada 1 variant network)
   const isSupported = supportedVariants.length > 0;
 
+  // daftar pair yang available utk dropdown (dari harga global)
+  const availablePairs = useMemo(
+    () => allPrices.filter((p) => p.status === "available"),
+    [allPrices]
+  );
+
   // set default selected network saat variants berubah
   useEffect(() => {
     if (supportedVariants.length === 0) {
@@ -327,6 +366,12 @@ export default function Order() {
 
   // nilai numeric dari amountIdr (dalam rupiah)
   const amountIdrNumber = amountIdr ? Number(amountIdr) : 0;
+
+  // apakah melebihi saldo
+  const exceedsBalance =
+    amountIdrNumber > 0 &&
+    availableBalanceNumber > 0 &&
+    amountIdrNumber > availableBalanceNumber;
 
   // tampilan "Rp 1.000"
   const formattedAmountIdr = amountIdrNumber
@@ -371,7 +416,8 @@ export default function Order() {
     isValidWallet &&
     amountIdrNumber > 0 &&
     estimatedToken > 0 &&
-    meetsDynamicMin;
+    meetsDynamicMin &&
+    !exceedsBalance;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -388,10 +434,6 @@ export default function Order() {
     setIsSubmitting(true);
 
     try {
-      // Pastikan simbol yang dipakai sama dengan yang ada di crypto_prices
-      // Sesuaikan dengan struktur datamu:
-      // - kalau supported_tokens punya field "symbol" → pakai itu
-      // - kalau token yang dipilih sudah "BTC", "ETH", dll → boleh pakai token.symbol
       const tokenSymbol = token
         ? token.symbol
         : selectedBackendToken.price_symbol;
@@ -401,25 +443,18 @@ export default function Order() {
 
       const order = await submitBuyOrder(
         tokenSymbol,
-        selectedBackendToken.network_key, // networkKey
-        Number(amountIdr), // amountIdr (pastikan number)
-        toAddress.trim() // toAddress
+        selectedBackendToken.network_key,
+        Number(amountIdr),
+        toAddress.trim()
       );
 
-      // simpan order terakhir kalau mau dipakai di UI
       setLastOrder(order);
-
-      // tutup preview
       setShowPreview(false);
 
-      // optional: kasih feedback ke user
       const tgWebApp = window.Telegram?.WebApp;
       if (tgWebApp?.showAlert) {
         tgWebApp.showAlert("Order pembelian sedang diproses ✅");
       }
-
-      // TODO (optional): panggil fungsi refresh saldo di Home/Profile kalau kamu punya,
-      // misalnya: await reloadBalance()
     } catch (err) {
       console.error("CONFIRM BUY FAILED:", err);
       setSubmitError(err.message || "Gagal mengirim order beli");
@@ -431,12 +466,18 @@ export default function Order() {
   const buttonLabelToken =
     estimatedToken > 0 ? formatTokenAmount(estimatedToken) : "";
 
+  const handleSetMaxAmount = () => {
+    if (!availableBalanceNumber || availableBalanceNumber <= 0) return;
+    // floor biar nggak ada pecahan aneh
+    setAmountIdr(String(Math.floor(availableBalanceNumber)));
+  };
+
+  const bgClass = amoled
+    ? "bg-black"
+    : "bg-gradient-to-b from-zinc-950 to-black";
+
   return (
-    <div
-      className={`min-h-screen px-4 pt-16 ${
-        amoled ? "bg-black" : "bg-gradient-to-b from-zinc-950 to-black"
-      } text-white pb-32`}
-    >
+    <div className={`min-h-screen px-4 pt-16 ${bgClass} text-white pb-32`}>
       {/* ===========================
           FLOATING HEADER
       ============================ */}
@@ -464,6 +505,8 @@ export default function Order() {
               subtitle={
                 token
                   ? formatPair(token.symbol)
+                  : symbol
+                  ? formatPair(symbol)
                   : "Silahkan pilih koin di Market"
               }
               onToggleTheme={toggleTheme}
@@ -478,6 +521,18 @@ export default function Order() {
           PAGE CONTENT
       ============================ */}
       <div className="max-w-md mx-auto space-y-5">
+        {/* Tombol kembali */}
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="mt-2 inline-flex items-center gap-2 mt-5 text-xs text-zinc-400 hover:text-zinc-100 transition"
+        >
+          <span className="inline-flex items-center justify-center h-7 w-7 rounded-full border border-zinc-700">
+            <ArrowLeft className="w-4 h-4" />
+          </span>
+          <span>Kembali</span>
+        </button>
+
         <BannerBox
           label="Tips"
           title="Waktu terbaik membeli"
@@ -485,102 +540,122 @@ export default function Order() {
           accent="emerald"
         />
 
-        {/* ====== MODE TANPA TOKEN: Dashboard 3 Card + History popup ====== */}
+        {/* ====== JIKA TOKEN TIDAK ADA ====== */}
         {!token && (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              {/* Card Order -> ke Market */}
-              <button
-                type="button"
-                onClick={() => navigate("/market")}
-                className={`
-                  rounded-2xl border p-4 text-left shadow-md
-                  ${
-                    amoled
-                      ? "bg-black/40 border-zinc-800"
-                      : "bg-zinc-900/80 border-zinc-800"
-                  }
-                  active:scale-[0.98] transition
-                `}
-              >
-                <p className="text-xs text-zinc-400 mb-1">Buat Order</p>
-                <p className="text-sm font-semibold text-white">
-                  Pilih koin di Market
-                </p>
-                <p className="text-[11px] text-zinc-500 mt-1">
-                  Tap untuk menuju halaman Market.
-                </p>
-              </button>
-
-              {/* Card History -> buka popup */}
-              <button
-                type="button"
-                onClick={() => setShowHistory(true)}
-                className={`
-                  rounded-2xl border p-4 text-left shadow-md
-                  ${
-                    amoled
-                      ? "bg-black/40 border-zinc-800"
-                      : "bg-zinc-900/80 border-zinc-800"
-                  }
-                  active:scale-[0.98] transition
-                `}
-              >
-                <p className="text-xs text-zinc-400 mb-1">Riwayat Order</p>
-                <p className="text-sm font-semibold text-white">
-                  Lihat semua order
-                </p>
-                <p className="text-[11px] text-zinc-500 mt-1">
-                  Tap untuk melihat riwayat order kamu.
-                </p>
-              </button>
-
-              {/* Card lain-lain (placeholder) */}
-              <button
-                type="button"
-                className={`
-                  col-span-2 rounded-2xl border p-4 text-left shadow-md
-                  ${
-                    amoled
-                      ? "bg-black/40 border-zinc-800"
-                      : "bg-zinc-900/80 border-zinc-800"
-                  }
-                  active:scale-[0.98] transition
-                `}
-              >
-                <p className="text-xs text-zinc-400 mb-1">Fitur Lainnya</p>
-                <p className="text-sm font-semibold text-white">Coming soon</p>
-                <p className="text-[11px] text-zinc-500 mt-1">
-                  Di sini bisa diisi fitur seperti template order, favorit, dsb.
-                </p>
-              </button>
-            </div>
-
-            {/* Popup History */}
-            {showHistory && (
-              <OrderHistoryPopup
-                orders={DUMMY_HISTORY}
-                onClose={() => setShowHistory(false)}
-              />
-            )}
-          </>
+          <div
+            className={`rounded-2xl border p-4 mt-2 text-center ${
+              amoled
+                ? "bg-black/40 border-zinc-800"
+                : "bg-zinc-900/80 border-zinc-800"
+            }`}
+          >
+            <p className="text-sm font-semibold text-white mb-1">
+              Token belum dipilih
+            </p>
+            <p className="text-xs text-zinc-400 mb-3">
+              Silakan pilih koin terlebih dahulu dari halaman Market untuk
+              membuat order.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate("/market")}
+              className="w-full py-2 rounded-xl bg-emerald-500 text-black text-sm font-semibold active:scale-[0.98] transition"
+            >
+              Pergi ke Market
+            </button>
+          </div>
         )}
 
         {/* ====== MODE ADA TOKEN ====== */}
         {token && (
           <>
-            {/* INFO COIN */}
+            {/* INFO COIN + pair dropdown */}
             <div
               className={`rounded-2xl border border-zinc-800 p-4 shadow-md ${
                 amoled ? "bg-black/40" : "bg-zinc-900/80"
               }`}
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold">
-                    {formatPair(token.symbol)}
-                  </p>
-                  <p className="text-xs text-zinc-400 mt-1">Last price (USD)</p>
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-1">
+                  <div ref={pairDropdownRef} className="relative inline-block">
+                    <button
+                      type="button"
+                      onClick={() => setIsPairDropdownOpen((prev) => !prev)}
+                      className="inline-flex items-center gap-1 text-sm font-semibold hover:text-emerald-300 transition"
+                    >
+                      <span>{formatPair(token.symbol)}</span>
+                      <svg
+                        className={`w-4 h-4 transition-transform ${
+                          isPairDropdownOpen ? "rotate-180" : ""
+                        }`}
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M6 9l6 6 6-6"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </button>
+
+                    {/* Dropdown pair list */}
+                    {availablePairs.length > 0 && (
+                      <div
+                        className={`
+                          absolute z-30 mt-2 w-44
+                          rounded-md border border-zinc-700
+                          bg-zinc-950
+                          shadow-lg
+                          max-h-64 overflow-auto
+                          transform origin-top left-0 top-5
+                          transition-all duration-150 ease-out
+                          ${
+                            isPairDropdownOpen
+                              ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
+                              : "opacity-0 scale-95 -translate-y-1 pointer-events-none"
+                          }
+                        `}
+                      >
+                        {availablePairs.map((p) => {
+                          const active = p.symbol === token.symbol;
+                          return (
+                            <button
+                              key={p.symbol}
+                              type="button"
+                              onClick={() => {
+                                setIsPairDropdownOpen(false);
+                                navigate(`/order/${p.symbol}`, {
+                                  state: { token: p },
+                                });
+                              }}
+                              className={`
+                                w-full text-left px-3 py-2 text-xs
+                                flex items-center justify-between
+                                ${
+                                  active
+                                    ? "bg-emerald-500/10 text-emerald-300"
+                                    : "text-zinc-200"
+                                }
+                                hover:bg-zinc-800/70
+                              `}
+                            >
+                              <span>{formatPair(p.symbol)}</span>
+                              {active && (
+                                <span className="text-[10px] text-emerald-400">
+                                  aktif
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-zinc-400">Last price (USD)</p>
                 </div>
 
                 <div className="text-right">
@@ -619,7 +694,7 @@ export default function Order() {
               )}
             </div>
 
-            {/* Jika token TIDAK tersedia untuk dijual */}
+            {/* Jika token TIDAK tersedia */}
             {!tokensLoading && !tokensError && !isSupported && (
               <div
                 className={`rounded-2xl border border-amber-700/70 p-4 shadow-md ${
@@ -644,7 +719,7 @@ export default function Order() {
               </div>
             )}
 
-            {/* INPUT ORDER — hanya muncul jika token didukung */}
+            {/* INPUT ORDER — hanya jika token didukung */}
             {!tokensLoading && !tokensError && isSupported && (
               <>
                 <form
@@ -664,33 +739,32 @@ export default function Order() {
                     </label>
 
                     <div ref={networkDropdownRef} className="relative mt-1">
-                      {/* Trigger */}
                       <button
                         type="button"
                         onClick={() => setIsNetworkDropdownOpen((v) => !v)}
                         className={`
-                                  w-full
-                                  flex items-center justify-between
-                                  bg-black/40
-                                  border
-                                  rounded-xl
-                                  px-3 py-2.5
-                                  text-sm
-                                  outline-none
-                                  transition
-                                  focus:border-emerald-500
-                                  focus:ring-2 focus:ring-emerald-500/20
-                                  ${
-                                    isNetworkDropdownOpen
-                                      ? "border-emerald-500/70 shadow-[0_0_0_1px_rgba(16,185,129,0.35)]"
-                                      : "border-zinc-700"
-                                  }
-                                  ${
-                                    supportedVariants.length === 0
-                                      ? "opacity-60 cursor-not-allowed"
-                                      : ""
-                                  }
-                          `}
+                          w-full
+                          flex items-center justify-between
+                          bg-black/40
+                          border
+                          rounded-xl
+                          px-3 py-2.5
+                          text-sm
+                          outline-none
+                          transition
+                          focus:border-emerald-500
+                          focus:ring-2 focus:ring-emerald-500/20
+                          ${
+                            isNetworkDropdownOpen
+                              ? "border-emerald-500/70 shadow-[0_0_0_1px_rgba(16,185,129,0.35)]"
+                              : "border-zinc-700"
+                          }
+                          ${
+                            supportedVariants.length === 0
+                              ? "opacity-60 cursor-not-allowed"
+                              : ""
+                          }
+                        `}
                         disabled={supportedVariants.length === 0}
                       >
                         <span className="truncate text-left">
@@ -724,7 +798,6 @@ export default function Order() {
                         </span>
                       </button>
 
-                      {/* Dropdown list */}
                       {supportedVariants.length > 0 && (
                         <div
                           className={`
@@ -757,15 +830,15 @@ export default function Order() {
                                   setIsNetworkDropdownOpen(false);
                                 }}
                                 className={`
-                                w-full text-left px-3 py-2 text-sm
-                                flex items-center justify-between
-                                ${
-                                  isActive
-                                    ? "bg-emerald-500/10"
-                                    : "bg-transparent"
-                                }
-                                hover:bg-zinc-800/60
-                              `}
+                                  w-full text-left px-3 py-2 text-sm
+                                  flex items-center justify-between
+                                  ${
+                                    isActive
+                                      ? "bg-emerald-500/10"
+                                      : "bg-transparent"
+                                  }
+                                  hover:bg-zinc-800/60
+                                `}
                               >
                                 <span className="truncate">{label}</span>
                                 {isActive && (
@@ -843,31 +916,57 @@ export default function Order() {
                     )}
                   </div>
 
-                  {/* Amount IDR */}
+                  {/* Amount IDR + MAX */}
                   <div>
                     <label className="text-xs text-zinc-400">
                       Amount (IDR)
                     </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="Rp 100.000"
-                      value={formattedAmountIdr}
-                      onChange={(e) => {
-                        // Ambil hanya digit 0–9
-                        const raw = e.target.value.replace(/[^0-9]/g, "");
-                        setAmountIdr(raw);
-                      }}
-                      className="w-full mt-1 bg-black/40 border border-zinc-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500"
-                    />
 
-                    {/* info minimal pembelian fix */}
+                    <div className="mt-1 flex items-center gap-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="Rp 100.000"
+                        value={formattedAmountIdr}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/[^0-9]/g, "");
+                          setAmountIdr(raw);
+                        }}
+                        className="flex-1 bg-black/40 border border-zinc-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSetMaxAmount}
+                        className="px-3 py-2 rounded-xl border border-zinc-700 text-[11px] font-semibold text-zinc-200 hover:border-emerald-500 hover:text-emerald-300 active:scale-[0.97] transition"
+                      >
+                        MAX
+                      </button>
+                    </div>
+
+                    <p className="text-[11px] text-zinc-500 mt-1">
+                      Saldo tersedia:{" "}
+                      <span className="font-medium text-zinc-200">
+                        {balanceLoading
+                          ? "Memuat..."
+                          : `Rp ${availableBalanceNumber.toLocaleString(
+                              "id-ID"
+                            )}`}
+                      </span>
+                    </p>
+
                     <p className="text-[11px] text-zinc-500 mt-1">
                       Minimum pembelian untuk jaringan ini:{" "}
                       <span className="font-medium">
                         Rp {dynamicMinIdr.toLocaleString("id-ID")}
                       </span>
                     </p>
+
+                    {exceedsBalance && (
+                      <p className="text-[11px] text-red-400 mt-1">
+                        Nominal melebihi saldo tersedia. Kurangi jumlah atau
+                        lakukan top up terlebih dahulu.
+                      </p>
+                    )}
 
                     {Number(amountIdr) > 0 && !meetsDynamicMin && (
                       <p className="text-[11px] text-amber-400 mt-1">
@@ -954,6 +1053,12 @@ export default function Order() {
                     )}
                   </div>
 
+                  {submitError && (
+                    <p className="text-[11px] text-red-400 mt-2">
+                      {submitError}
+                    </p>
+                  )}
+
                   <div className="pt-2">
                     <button
                       type="submit"
@@ -981,21 +1086,19 @@ export default function Order() {
             {/* PREVIEW MODAL */}
             {showPreview && (
               <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-                {/* backdrop */}
                 <div
                   className="absolute inset-0 bg-black/70 backdrop-blur-sm"
                   onClick={() => setShowPreview(false)}
                 />
 
-                {/* card */}
                 <div
                   className={`
-        relative z-10 w-full max-w-sm
-        rounded-2xl border border-zinc-800
-        shadow-xl
-        ${amoled ? "bg-black" : "bg-zinc-900"}
-        p-4 space-y-3
-      `}
+                    relative z-10 w-full max-w-sm
+                    rounded-2xl border border-zinc-800
+                    shadow-xl
+                    ${amoled ? "bg-black" : "bg-zinc-900"}
+                    p-4 space-y-3
+                  `}
                 >
                   <h3 className="text-sm font-semibold text-white">
                     Konfirmasi Pembelian
@@ -1109,7 +1212,6 @@ export default function Order() {
               </div>
             )}
 
-            {/* Jika masih loading / error, tapi token ada */}
             {!tokensLoading && tokensError && (
               <div className="text-xs text-zinc-500 text-center pt-2">
                 Tidak dapat memverifikasi ketersediaan token. Coba lagi beberapa

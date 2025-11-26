@@ -1,42 +1,24 @@
 // src/components/SparklineMini.jsx
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Sparklines, SparklinesLine } from "react-sparklines";
-import { getSparkline } from "../services/api";
+import useSparkline from "../hooks/useSparkline";
 
 export default function SparklineMini({ symbol, positive, negative }) {
-  const [points, setPoints] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      try {
-        setLoading(true);
-        const data = await getSparkline(symbol);
-        if (!cancelled) {
-          setPoints(Array.isArray(data.points) ? data.points : []);
-        }
-      } catch (err) {
-        console.error("SparklineMini error:", err.message);
-        if (!cancelled) setPoints([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    if (symbol) load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [symbol]);
+  const { points, loading, error } = useSparkline(symbol);
 
   if (loading || !points.length) {
     // placeholder kecil biar layout nggak loncat
     return (
       <div className="w-28 sm:w-32 h-[30px] flex items-center">
         <div className="w-full h-[2px] rounded-full bg-zinc-700/60 animate-pulse" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="w-28 sm:w-32 h-[30px] flex items-center justify-center text-xs text-zinc-500">
+        -
       </div>
     );
   }

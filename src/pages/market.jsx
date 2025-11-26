@@ -2,7 +2,6 @@
 // src/pages/Market.jsx
 // ===============================
 import React, { useEffect, useRef, useState } from "react";
-import { getAllPrices, getPrice } from "../services/api";
 import { ArrowUp, ArrowDown } from "lucide-react";
 import SparklineMini from "../components/SparklineMini";
 
@@ -11,7 +10,12 @@ import GlobalHeader from "../components/GlobalHeader";
 import { useNavigate } from "react-router-dom";
 import BannerBox from "../components/BannerBox";
 import useNotificationsBadge from "../hooks/useNotificationsBadge";
-import { API_BASE_URL } from "../config/api";
+import useMarketPrices from "../hooks/useMarketPrices";
+import useEthMovement from "../hooks/useEthMovement";
+import useMarketSupportedTokens from "../hooks/useMarketSupportedTokens";
+import MarketRowSkeleton from "../components/skeleton/MarketRowSkeleton";
+
+import toast from "react-hot-toast";
 
 /* -------------------- Constants -------------------- */
 // const TOKENS_API = "https://cryptoku-backend-beige.vercel.app/api/tokens";
@@ -155,7 +159,6 @@ function PriceItem({ item, previous, amoled, translateForItem = 0, onClick }) {
         </div>
 
         {/* MIDDLE: sparkline */}
-        {/* MIDDLE: sparkline */}
         <SparklineMini
           symbol={item.symbol}
           positive={positive}
@@ -195,18 +198,26 @@ export default function Market() {
   const { amoled, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const { unreadCount } = useNotificationsBadge();
-  const [prices, setPrices] = useState([]);
-  const [previousPrices, setPreviousPrices] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState(null);
-  const [lastUpdated, setLastUpdated] = useState(Date.now());
+  const {
+    prices: sorted,
+    previousPrices,
+    loading,
+    isRefreshing,
+    error,
+    lastUpdated,
+    refresh,
+  } = useMarketPrices();
 
-  // daftar token yang benar-benar dijual (dari /api/tokens)
-  const [supportedTokens, setSupportedTokens] = useState([]);
-  const [tokensLoading, setTokensLoading] = useState(true);
-  const [tokensError, setTokensError] = useState(null);
+  const {
+    supportedTokens,
+    tokensLoading, // kalau mau dipakai lagi nanti
+    tokensError,
+  } = useMarketSupportedTokens();
 
+  const { movement: ethMovement, loading: ethLoading } = useEthMovement();
+  const titleText = ethLoading
+    ? "ETH bergerak..."
+    : `ETH bergerak ${ethMovement} hari ini`;
   // Floating header state (match Home)
   const [showHeader, setShowHeader] = useState(true);
   const lastScrollY = useRef(0);
@@ -218,154 +229,6 @@ export default function Market() {
 
   const [pullProgress, setPullProgress] = useState(0);
   const [baseTranslate, setBaseTranslate] = useState(0);
-
-  const CACHE_KEY = "market_cache_v1";
-  const CACHE_TTL = 10000;
-  const [ethMovement, setEthMovement] = useState("..."); // State untuk menyimpan hasil
-  const [bannerLoading, setBannerLoading] = useState(true);
-
-  useEffect(() => {
-    // Fungsi untuk mengambil data dan update state
-    const fetchEthMovement = async () => {
-      try {
-        setBannerLoading(true);
-        // Anda tidak menggunakan 'priceMovement' dari getPrice di title Anda,
-        // jadi fokus pada 'change' dari 'item'.
-        const priceMovement = await getPrice("ethusdt");
-
-        // Pastikan 'item' tersedia di sini. Asumsi 'item' adalah object data API.
-        const change = Number(priceMovement.priceChangePercent) || 0;
-
-        let movementStatus = "";
-
-        if (change > 0) {
-          // Jika nilai positif (misalnya 3.2), anggap NAIK
-          movementStatus = `naik +${change.toFixed(2)}`;
-        } else if (change < 0) {
-          // Jika nilai negatif (misalnya -3.2), anggap TURUN
-          movementStatus = `turun ${change}`;
-        } else {
-          // Jika nilai 0
-          movementStatus = `stabil ${change}`;
-        }
-
-        // Simpan status pergerakan ini ke state
-        // Anda mungkin perlu mengganti setEthMovement menjadi setEthMovementStatus
-        setEthMovement(movementStatus);
-      } catch (error) {
-        console.error("Gagal mengambil data ETH:", error);
-        setEthMovement("perubahan tidak diketahui");
-      } finally {
-        setBannerLoading(false);
-      }
-    };
-
-    fetchEthMovement();
-  }, []); // Tambahkan [item] ke dependency array jika 'item' adalah prop
-
-  // Tampilkan loading state atau data yang sudah didapat
-  const titleText = loading
-    ? "ETH bergerak..."
-    : `ETH bergerak ${ethMovement} hari ini`;
-  // Fetch daftar token yang dijual dari backend
-  useEffect(() => {
-    let aborted = false;
-
-    const fetchSupportedTokens = async () => {
-      try {
-        setTokensLoading(true);
-        setTokensError(null);
-
-        const res = await fetch(`${API_BASE_URL}/tokens`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-        const json = await res.json();
-        if (!json.success) throw new Error("API tidak success");
-
-        const activeTokens = (json.data || []).filter((t) => t.is_active);
-        if (!aborted) {
-          setSupportedTokens(activeTokens);
-        }
-      } catch (err) {
-        console.error("fetchSupportedTokens error:", err);
-        if (!aborted) {
-          setTokensError("Gagal memuat daftar token yang tersedia.");
-        }
-      } finally {
-        if (!aborted) setTokensLoading(false);
-      }
-    };
-
-    fetchSupportedTokens();
-
-    return () => {
-      aborted = true;
-    };
-  }, []);
-
-  const fetchPrices = async (force = false) => {
-    setError(null);
-
-    try {
-      const cached = sessionStorage.getItem(CACHE_KEY);
-
-      if (!force && cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          if (Date.now() - parsed.timestamp < CACHE_TTL) {
-            setPreviousPrices(parsed.previous || []);
-            setPrices(parsed.data || []);
-            setLastUpdated(parsed.timestamp);
-            setLoading(false);
-            setIsRefreshing(false);
-            return;
-          }
-        } catch {
-          // ignore parse error
-        }
-      }
-
-      const data = await getAllPrices();
-      const arr = Array.isArray(data) ? data : data?.data || [];
-
-      const withSpark = arr.map((x) => ({
-        ...x,
-        price_usd: Number(x.price_usd) || 0,
-        price_idr: Number(x.price_idr) || 0,
-        priceChangePercent: Number(x.priceChangePercent) || 0,
-        // sparkline akan diambil oleh SparklineMini dari backend
-      }));
-
-      const save = {
-        data: withSpark,
-        previous: prices,
-        timestamp: Date.now(),
-      };
-
-      try {
-        sessionStorage.setItem(CACHE_KEY, JSON.stringify(save));
-      } catch {
-        // ignore storage error
-      }
-
-      setPreviousPrices(prices);
-      setPrices(withSpark);
-      setLastUpdated(Date.now());
-    } catch (err) {
-      console.error("fetchPrices error:", err);
-      setError("Gagal memuat harga, periksa koneksi.");
-    } finally {
-      setLoading(false);
-      setIsRefreshing(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchPrices();
-    const id = setInterval(() => fetchPrices(true), 20000);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   /* -------------------- Pull-to-refresh -------------------- */
   const onTouchStart = (e) => {
@@ -400,11 +263,6 @@ export default function Market() {
     if (!pulling.current) return;
     pulling.current = false;
 
-    if (pullProgress >= 1) {
-      setIsRefreshing(true);
-      fetchPrices(true);
-    }
-
     setPullProgress(0);
     setBaseTranslate(0);
   };
@@ -415,22 +273,6 @@ export default function Market() {
     const lengthFactor = Math.max(0.5, 1 - total / 80);
     return Math.round(base * sensitivity * lengthFactor);
   };
-
-  // urutkan dulu berdasarkan price_usd desc
-  const sortedByPrice = prices
-    .slice()
-    .sort((a, b) => Number(b.price_usd) - Number(a.price_usd));
-
-  // pisahkan berdasarkan status dari backend
-  const availableItems = sortedByPrice.filter(
-    (item) => item.status === "available"
-  );
-  const unavailableItems = sortedByPrice.filter(
-    (item) => item.status !== "available"
-  );
-
-  // gabungkan: available dulu, lalu yang coming soon/unavailable
-  const sorted = [...availableItems, ...unavailableItems];
   const total = sorted.length;
 
   /* -------------------- Floating header scroll logic (match Home) -------------------- */
@@ -459,14 +301,26 @@ export default function Market() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // handler: klik item -> pindah ke /order sambil bawa data koin
-  const handleSelectToken = (token) => {
-    navigate("/order", {
+  function handleSelectToken(item) {
+    const supported = isItemSupported(item);
+
+    if (!supported) {
+      toast("🚧 Token ini belum tersedia", {
+        style: {
+          background: "#111",
+          color: "#fff",
+          border: "1px solid #27272a",
+        },
+      });
+      return;
+    }
+
+    navigate(`/order/${item.symbol}`, {
       state: {
-        token, // seluruh object item
+        token: item, // seluruh object item
       },
     });
-  };
+  }
 
   // helper: cek apakah suatu item market tersedia di daftar token jual
   const isItemSupported = (item) => {
@@ -476,6 +330,17 @@ export default function Market() {
       (t) => String(t.symbol).toUpperCase() === baseSymbol
     );
   };
+
+  const firstUnavailableIndex = sorted.findIndex(
+    (item) => item.status !== "available"
+  );
+
+  console.log(
+    "Statuses:",
+    sorted.map((s) => s.symbol + ":" + s.status)
+  );
+
+  console.log("First unavailable index:", firstUnavailableIndex);
 
   return (
     <div
@@ -534,18 +399,6 @@ export default function Market() {
           <span>Update: {formatTime(lastUpdated)}</span>
         </div>
 
-        {/* Info bar token support */}
-        {/* <div className="flex items-center justify-between text-[11px] text-zinc-500 mb-2">
-          <span>Token tersedia di CryptoKu</span>
-          <span>
-            {tokensLoading
-              ? "Memuat..."
-              : tokensError
-              ? "Gagal memuat"
-              : `${supportedTokens.length} token`}
-          </span>
-        </div> */}
-
         {/* Pull-to-refresh indicator */}
         <div
           aria-hidden
@@ -601,46 +454,56 @@ export default function Market() {
             transform: `translateY(${baseTranslate}px)`,
           }}
         >
-          {loading && (
-            <div className="flex items-center justify-center py-10">
-              <div className="animate-spin h-6 w-6 border-4 border-t-transparent rounded-full border-emerald-400/80" />
-              <div className="text-zinc-400 ml-3 text-sm">
-                Memuat data harga...
-              </div>
+          {/* LOADING */}
+          {loading && !error && (
+            <div className="mt-4 space-y-3">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <MarketRowSkeleton key={i} amoled={amoled} />
+              ))}
             </div>
           )}
 
-          {error && (
-            <div className="p-4 rounded-2xl text-red-300 bg-red-900/15 border border-red-800/40 text-sm">
-              {error}
-            </div>
+          {/* ERROR */}
+          {!loading && error && (
+            <p className="mt-4 text-sm text-amber-400">{error}</p>
           )}
 
+          {/* DATA */}
           {!loading && !error && sorted.length > 0 && (
             <div className="space-y-3">
               {sorted.map((item, i) => {
-                // hanya dianggap "bisa diorder" kalau:
-                // - status dari backend = "available"
-                // - dan ada di daftar token jual (/api/tokens)
                 const isSupported =
                   item.status === "available" && isItemSupported(item);
 
                 return (
-                  <PriceItem
-                    key={item.symbol || i}
-                    item={item}
-                    previous={previousPrices.find(
-                      (p) => p.symbol === item.symbol
-                    )}
-                    amoled={amoled}
-                    translateForItem={computeItemTranslate(
-                      i,
-                      total,
-                      baseTranslate
-                    )}
-                    isSupported={isSupported}
-                    onClick={() => handleSelectToken(item)}
-                  />
+                  <React.Fragment key={item.symbol || i}>
+                    {/* ✅ MISAHKAN AREA AVAILABLE & UNAVAILABLE */}
+                    {i === firstUnavailableIndex &&
+                      firstUnavailableIndex !== -1 && (
+                        <div className="py-4 flex items-center gap-4">
+                          <div className="flex-1 h-px bg-zinc-800" />
+                          <span className="text-xs text-zinc-500 tracking-wide">
+                            Coming Soon
+                          </span>
+                          <div className="flex-1 h-px bg-zinc-800" />
+                        </div>
+                      )}
+
+                    <PriceItem
+                      item={item}
+                      previous={previousPrices.find(
+                        (p) => p.symbol === item.symbol
+                      )}
+                      amoled={amoled}
+                      translateForItem={computeItemTranslate(
+                        i,
+                        total,
+                        baseTranslate
+                      )}
+                      isSupported={isSupported}
+                      onClick={() => handleSelectToken(item)}
+                    />
+                  </React.Fragment>
                 );
               })}
             </div>

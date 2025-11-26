@@ -3,7 +3,7 @@
 // ===============================
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { Home, User, ShoppingCart, BarChart3 } from "lucide-react";
+import { Home, User, History, BarChart3 } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 
 export default function BottomNav() {
@@ -35,7 +35,11 @@ export default function BottomNav() {
             px-4 py-2
             backdrop-blur-md
             shadow-lg
-            ${amoled ? "bg-black/80 border-zinc-900" : "bg-zinc-900/85 border-zinc-800"}
+            ${
+              amoled
+                ? "bg-black/80 border-zinc-900"
+                : "bg-zinc-900/85 border-zinc-800"
+            }
           `}
         >
           <TabItem to="/" label="Home" amoled={amoled}>
@@ -46,8 +50,8 @@ export default function BottomNav() {
             <BarChart3 size={20} />
           </TabItem>
 
-          <TabItem to="/order" label="Order" amoled={amoled}>
-            <ShoppingCart size={20} />
+          <TabItem to="/activity" label="Activity" amoled={amoled}>
+            <History size={20} />
           </TabItem>
 
           <TabItem to="/profile" label="Profile" amoled={amoled}>
@@ -87,7 +91,10 @@ function TabItem({ to, label, children, amoled }) {
               transition-all duration-200
               ${isActive ? "bg-emerald-500/15" : "bg-transparent"}
             `}
-            style={{ transformOrigin: "center", transform: isActive ? "scale(1.05)" : "scale(1.0)" }}
+            style={{
+              transformOrigin: "center",
+              transform: isActive ? "scale(1.05)" : "scale(1.0)",
+            }}
           >
             {children}
           </div>

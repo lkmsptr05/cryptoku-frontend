@@ -21,7 +21,7 @@ export default function BannerBox({
 
   return (
     <div
-      className={`relative mt-5 overflow-hidden rounded-2xl border shadow-lg p-4
+      className={`relative overflow-hidden rounded-2xl border shadow-lg p-4
       ${
         amoled
           ? "bg-black/40 border-zinc-800"
@@ -41,13 +41,9 @@ export default function BannerBox({
           {label}
         </p>
 
-        <p className="text-lg font-semibold">
-          {title}
-        </p>
+        <p className="text-lg font-semibold">{title}</p>
 
-        <p className="text-sm text-zinc-400">
-          {description}
-        </p>
+        <p className="text-sm text-zinc-400">{description}</p>
       </div>
     </div>
   );

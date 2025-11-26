@@ -1,15 +1,15 @@
-// src/hooks/useBalanceHistory.js
+// src/hooks/useOrderHistory.js
 import { useEffect, useState } from "react";
 import { API_BASE_URL } from "../config/api";
 
-export function useBalanceHistory({ initData }) {
+export default function useOrderHistory({ initData }) {
   const [items, setItems] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchHistory = async (isLoadMore = false) => {
+  const fetchOrders = async (isLoadMore = false) => {
     if (!initData) return;
     if (isLoadMore && !nextCursor) return;
 
@@ -25,7 +25,7 @@ export function useBalanceHistory({ initData }) {
       }
 
       const res = await fetch(
-        `${API_BASE_URL}/me/balance/history?${params.toString()}`,
+        `${API_BASE_URL}/me/orders?${params.toString()}`,
         {
           headers: {
             "x-telegram-init-data": initData,
@@ -38,7 +38,6 @@ export function useBalanceHistory({ initData }) {
       }
 
       const data = await res.json();
-      console.log(data);
 
       if (isLoadMore) {
         setItems((prev) => [...prev, ...(data.items || [])]);
@@ -48,8 +47,8 @@ export function useBalanceHistory({ initData }) {
 
       setNextCursor(data.nextCursor || null);
     } catch (err) {
-      console.error("useBalanceHistory error:", err);
-      setError(err.message || "Gagal memuat riwayat saldo");
+      console.error("useOrderHistory error:", err);
+      setError(err.message || "Gagal memuat riwayat order");
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -57,7 +56,7 @@ export function useBalanceHistory({ initData }) {
   };
 
   useEffect(() => {
-    fetchHistory(false);
+    fetchOrders(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initData]);
 
@@ -67,7 +66,7 @@ export function useBalanceHistory({ initData }) {
     loadingMore,
     error,
     hasMore: !!nextCursor,
-    reload: () => fetchHistory(false),
-    loadMore: () => fetchHistory(true),
+    reload: () => fetchOrders(false),
+    loadMore: () => fetchOrders(true),
   };
 }

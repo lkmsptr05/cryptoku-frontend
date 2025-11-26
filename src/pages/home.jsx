@@ -3,12 +3,6 @@
 // ===============================
 import React, { useState, useEffect, useRef } from "react";
 import { ArrowUp, ArrowDown, Eye, EyeOff } from "lucide-react";
-import {
-  getSystemHealth,
-  getAllPrices,
-  getMyBalance,
-  getCryptoNews,
-} from "../services/api";
 import SystemHealthPopup from "../components/SystemHealthPopup";
 import { useTheme } from "../contexts/ThemeContext";
 import GlobalHeader from "../components/GlobalHeader";
@@ -16,6 +10,11 @@ import useNotificationsBadge from "../hooks/useNotificationsBadge";
 import useTopup from "../hooks/useTopup";
 import TopUpModal from "../components/TopupModal";
 import { useNavigate } from "react-router-dom";
+import useMyBalance from "../hooks/useMyBalance";
+import useSystemHealth from "../hooks/useSystemHealth";
+import useTopGainers from "../hooks/useTopGainers";
+import useCryptoNews from "../hooks/useCryptoNews";
+import useMarketIndex from "../hooks/useMarketIndex";
 
 const formatIDR = (n) => {
   const num = Number(n);
@@ -34,22 +33,16 @@ export default function Home({ telegramUser, initData }) {
 
   const { amoled, toggleTheme } = useTheme();
   const { unreadCount } = useNotificationsBadge();
-  const [health, setHealth] = useState([]);
   const [showPopup, setShowPopup] = useState(false);
-  const [gainers, setGainers] = useState([]);
-
-  const [marketIndex, setMarketIndex] = useState([]);
 
   // NEWS
-  const [news, setNews] = useState([]);
-  const [newsLoading, setNewsLoading] = useState(true);
-  const [newsError, setNewsError] = useState(null);
   const [newsTab, setNewsTab] = useState("all");
 
-  // saldo
-  const [balance, setBalance] = useState(0);
-  const [balanceLoading, setBalanceLoading] = useState(true);
-  const [balanceError, setBalanceError] = useState(null);
+  const { health } = useSystemHealth();
+  const { gainers } = useTopGainers(3);
+  const { marketIndex } = useMarketIndex();
+
+  const { news, loading: newsLoading, error: newsError } = useCryptoNews();
 
   // hide saldo
   const [hideBalance, setHideBalance] = useState(() => {
@@ -69,155 +62,11 @@ export default function Home({ telegramUser, initData }) {
   const formatPair = (symbol) =>
     symbol?.toUpperCase().replace(/(USDT|USDC)$/, "/$1");
 
-  // =============================
-  // LOAD SYSTEM HEALTH
-  // =============================
-  const refreshHomeData = () => {
-    getSystemHealth()
-      .then((res) => setHealth(res || []))
-      .catch(console.error);
-  };
-
-  const calculateIndex = async () => {
-    const res = await getAllPrices();
-    const arr = Array.isArray(res) ? res : res?.data || [];
-
-    if (!arr || arr.length === 0) {
-      return {
-        index: 0,
-        sentiment: "Neutral",
-        color: "text-zinc-400",
-      };
-    }
-
-    const total = arr.reduce(
-      (acc, c) => acc + Number(c.priceChangePercent || 0),
-      0
-    );
-
-    const index = total / arr.length;
-
-    let sentiment = "Neutral";
-    let style =
-      "inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2 py-[2px] text-[10px] text-zinc-400 border border-zinc-500/30";
-    let arrow = "";
-    let animate = "h-1.5 w-1.5 rounded-full bg-zinc-400 animate-pulse";
-    let color = "text-zinc-400";
-
-    if (index > 1) {
-      sentiment = "Bullish";
-      arrow = "▲";
-      color = "text-emerald-400";
-      style =
-        "inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-[2px] text-[10px] text-emerald-400 border border-emerald-500/30";
-      animate = "h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse";
-    } else if (index < -1) {
-      sentiment = "Bearish";
-      arrow = "▼";
-      color = "text-red-400";
-      style =
-        "inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-[2px] text-[10px] text-red-400 border border-red-500/30";
-      animate = "h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse";
-    }
-
-    return {
-      index: Number(index.toFixed(2)),
-      sentiment,
-      style,
-      arrow,
-      animate,
-      color,
-    };
-  };
-
-  // =============================
-  // LOAD TOP 3 GAINERS (REAL DATA)
-  // =============================
-  const loadTopGainers = async () => {
-    try {
-      const res = await getAllPrices();
-      const arr = Array.isArray(res) ? res : res?.data || [];
-
-      const sorted = [...arr]
-        .filter(
-          (t) =>
-            t.priceChangePercent !== undefined && t.priceChangePercent !== null
-        )
-        .map((t) => ({
-          ...t,
-          priceChangePercent: Number(t.priceChangePercent),
-        }))
-        .filter((t) => !Number.isNaN(t.priceChangePercent))
-        .sort((a, b) => b.priceChangePercent - a.priceChangePercent)
-        .slice(0, 3);
-
-      setGainers(sorted);
-    } catch (err) {
-      console.error("Error memuat top gainers:", err);
-    }
-  };
-
-  const loadNews = async () => {
-    try {
-      setNewsLoading(true);
-      setNewsError(null);
-      const data = await getCryptoNews();
-      setNews(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("Error memuat berita:", err);
-      setNewsError(err.message || "Gagal memuat berita");
-      setNews([]);
-    } finally {
-      setNewsLoading(false);
-    }
-  };
-
-  // =============================
-  // INIT LOAD
-  // =============================
-  useEffect(() => {
-    refreshHomeData();
-    loadTopGainers();
-    loadNews();
-  }, []);
-
-  // =============================
-  // LOAD SALDO USER (pakai service)
-  // =============================
-  useEffect(() => {
-    // kalau belum ada telegramUser (misal dev di browser biasa)
-    if (!telegramUser?.id) {
-      setBalanceLoading(false);
-      return;
-    }
-    console.log(telegramUser);
-    const load = async () => {
-      try {
-        setBalanceLoading(true);
-        setBalanceError(null);
-
-        const saldo = await getMyBalance(telegramUser.id);
-        setBalance(saldo);
-      } catch (err) {
-        console.error("Get balance error:", err);
-        setBalanceError(err.message || "Gagal memuat saldo");
-        setBalance(0);
-      } finally {
-        setBalanceLoading(false);
-      }
-    };
-
-    load();
-  }, [telegramUser?.id]);
-
-  useEffect(() => {
-    async function loadIndex() {
-      const result = await calculateIndex();
-      setMarketIndex(result);
-    }
-
-    loadIndex();
-  }, []);
+  const {
+    balance,
+    loading: balanceLoading,
+    error: balanceError,
+  } = useMyBalance(telegramUser?.id);
 
   // =============================
   // HIDE BALANCE
@@ -489,7 +338,7 @@ export default function Home({ telegramUser, initData }) {
               amoled ? "bg-black/40" : "bg-zinc-900/80"
             }`}
           >
-            <p className="text-xs text-zinc-400 mb-1 flex items-center justify-between">
+            <div className="text-xs text-zinc-400 mb-1 flex items-center justify-between">
               <p className="text-xs text-zinc-400 uppercase tracking-[0.18em]">
                 System Health
               </p>
@@ -497,7 +346,7 @@ export default function Home({ telegramUser, initData }) {
                 Live
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
               </span>
-            </p>
+            </div>
             <p className="text-emerald-400 text-xl font-bold">OK</p>
             <p className="text-[11px] text-zinc-500 mt-1">
               Tap untuk detail status sistem
