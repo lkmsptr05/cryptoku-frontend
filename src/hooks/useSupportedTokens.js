@@ -1,8 +1,8 @@
 // src/hooks/useSupportedTokens.js
 import { useEffect, useState } from "react";
+import { API_BASE_URL } from "../config/api";
 
-const TOKENS_API = "https://cryptoku-backend-beige.vercel.app/api/tokens";
-
+const TOKENS_API = `${API_BASE_URL}/supported-tokens`;
 /**
  * Response backend:
  * {

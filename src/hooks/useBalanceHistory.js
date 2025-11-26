@@ -1,5 +1,6 @@
 // src/hooks/useBalanceHistory.js
 import { useEffect, useState } from "react";
+import { API_BASE_URL } from "../config/api";
 
 export function useBalanceHistory({ initData }) {
   const [items, setItems] = useState([]);
@@ -23,11 +24,14 @@ export function useBalanceHistory({ initData }) {
         params.set("before", nextCursor);
       }
 
-      const res = await fetch(`/api/me/balance/history?${params.toString()}`, {
-        headers: {
-          "x-telegram-init-data": initData,
-        },
-      });
+      const res = await fetch(
+        `${API_BASE_URL}/me/balance/history?${params.toString()}`,
+        {
+          headers: {
+            "x-telegram-init-data": initData,
+          },
+        }
+      );
 
       if (!res.ok) {
         throw new Error(`Error ${res.status}`);

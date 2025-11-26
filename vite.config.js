@@ -13,21 +13,21 @@ export default defineConfig({
     }),
   ],
   server: {
-    //   host: "0.0.0.0",
-    //   port: 5173,
+    host: "0.0.0.0",
+    port: 5173,
 
-    //   // ✅ IZINKAN NGROK
+    // ✅ IZINKAN NGROK
     allowedHosts: [
-      //     "192.168.100.131",
-      //     ".ngrok-free.app", // domain ngrok baru
-      //     ".ngrok.app", // jaga-jaga
-      ".ngrok-free.dev", // domain ngrok lama
+      "192.168.100.131",
+      ".ngrok-free.app", // domain ngrok baru
+      ".ngrok.app", // jaga-jaga
+      ".ngrok-free.dev",
     ],
-    //   // proxy: {
-    //   //   "/api": {
-    //   //     target: "https://cryptoku-backend-beige.vercel.app/api",
-    //   //     changeOrigin: true,
-    //   //   },
-    //   // },
+    proxy: {
+      "/api": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+      },
+    },
   },
 });

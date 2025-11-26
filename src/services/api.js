@@ -1,9 +1,7 @@
 // src/services/api.js
-
+import { API_BASE_URL } from "./config/api";
 // Bisa nanti diganti ke env: import.meta.env.VITE_API_BASE_URL
 // Kalau tidak ada, fallback ke "/api" (reverse proxy dari frontend)
-const API_BASE_URL = "https://cryptoku-backend-beige.vercel.app/api";
-// const API_BASE_URL = "/api";
 
 /* -------------------------------------------------------------------------- */
 /*                                Helper Utils                                */
@@ -76,7 +74,7 @@ const formatPair = (symbol) =>
  */
 export async function getAllPrices() {
   try {
-    const { res, data } = await request("/prices");
+    const { res, data } = await request(`${API_BASE_URL}/prices`);
 
     if (!res.ok || data.error) {
       throw new Error(data.error?.message || "Gagal mengambil semua harga.");
@@ -94,7 +92,7 @@ export async function getAllPrices() {
  */
 export async function getPrice(symbol) {
   try {
-    const { res, data } = await request(`/prices/${symbol}`);
+    const { res, data } = await request(`${API_BASE_URL}/prices/${symbol}`);
 
     if (!res.ok || data.error) {
       throw new Error(
@@ -118,7 +116,7 @@ export async function getPrice(symbol) {
  */
 export async function getNetworks() {
   try {
-    const { res, data } = await request("/networks");
+    const { res, data } = await request(`${API_BASE_URL}/networks`);
 
     if (!res.ok || data.error) {
       throw new Error(
@@ -142,7 +140,9 @@ export async function getNetworks() {
  */
 export async function getTokensByNetwork(networkKey) {
   try {
-    const { res, data } = await request(`/tokens?network=${networkKey}`);
+    const { res, data } = await request(
+      `${API_BASE_URL}/tokens?network=${networkKey}`
+    );
 
     if (!res.ok || data.error) {
       throw new Error(
@@ -167,7 +167,7 @@ export async function getTokensByNetwork(networkKey) {
  */
 export async function getSystemHealth() {
   try {
-    const { res, data } = await request("/health");
+    const { res, data } = await request(`${API_BASE_URL}/health`);
 
     if (!res.ok || data.error) {
       throw new Error(
@@ -194,13 +194,15 @@ export async function getGas(network_key, to, tokenAddress = null, amount) {
     const qs = new URLSearchParams({
       network_key,
       to,
-      from: "0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B", // TODO: ganti ke address yang bener nanti
+      from: "0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B",
     });
 
     if (tokenAddress) qs.set("tokenAddress", tokenAddress);
     if (amount != null) qs.set("amount", String(amount));
 
-    const { res, data } = await request(`/estimate-gas?${qs.toString()}`);
+    const { res, data } = await request(
+      `${API_BASE_URL}/estimate-gas?${qs.toString()}`
+    );
 
     if (!res.ok || data.error) {
       throw new Error(data.error?.message || "Error mendapatkan data gas fee.");
@@ -221,7 +223,9 @@ export async function getGas(network_key, to, tokenAddress = null, amount) {
  * GET /api/prices/:symbol/sparkline
  */
 export async function getSparkline(symbol) {
-  const { res, data } = await request(`/prices/${symbol}/sparkline`);
+  const { res, data } = await request(
+    `${API_BASE_URL}/prices/${symbol}/sparkline`
+  );
 
   if (!res.ok) {
     throw new Error(`Sparkline HTTP ${res.status}`);
@@ -269,7 +273,7 @@ export async function getMyBalance() {
 export async function getMe() {
   try {
     const { res, data } = await request(
-      "/me",
+      `${API_BASE_URL}/me`,
       { method: "GET" },
       { requireInitData: true }
     );
@@ -290,7 +294,7 @@ export async function getMe() {
 
 export async function createTopupQR(amount) {
   const { res, data } = await request(
-    "/topup/qris",
+    `${API_BASE_URL}/topup/qris`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -306,7 +310,7 @@ export async function createTopupQR(amount) {
 
 export async function getNotifications() {
   const { res, data } = await request(
-    "/notifications",
+    `${API_BASE_URL}/notifications`,
     { method: "GET" },
     { requireInitData: true }
   );
@@ -335,7 +339,7 @@ export async function submitBuyOrder(
   toAddress
 ) {
   const { res, data } = await request(
-    "/orders/buy",
+    `${API_BASE_URL}/orders/buy`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

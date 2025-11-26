@@ -1,10 +1,11 @@
 // src/pages/balance-history.jsx
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import GlobalHeader from "../components/GlobalHeader";
 import { useTheme } from "../contexts/ThemeContext";
 import { BALANCE_CHANGE_STYLES } from "../constant/balanceHistoryStyles";
 import useNotificationsBadge from "../hooks/useNotificationsBadge";
+import { useBalanceHistory } from "../hooks/useBalanceHistory";
 
 function formatAmount(amount) {
   const n = Number(amount) || 0;
@@ -28,67 +29,17 @@ export default function BalanceHistoryPage() {
   const navigate = useNavigate();
   const { theme } = useTheme?.() || { theme: "dark" };
   const { unreadCount } = useNotificationsBadge();
-  const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState([]);
-  const [error, setError] = useState("");
-  const [nextCursor, setNextCursor] = useState(null);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
 
   const isAmoled = theme === "amoled";
 
-  const fetchHistory = async (isLoadMore = false) => {
-    try {
-      if (isLoadMore) setLoadingMore(true);
-      else setLoading(true);
-      setError("");
+  // 🔹 ambil initData sekali di sini
+  const tgWebApp = window.Telegram?.WebApp;
+  const initData = tgWebApp?.initData || "";
 
-      const tgWebApp = window.Telegram?.WebApp;
-      const initData = tgWebApp?.initData || "";
-
-      const params = new URLSearchParams();
-      params.set("limit", "20");
-      if (isLoadMore && nextCursor) {
-        params.set("before", nextCursor);
-      }
-
-      const res = await fetch(`/api/me/balance/history?${params.toString()}`, {
-        headers: {
-          "x-telegram-init-data": initData,
-        },
-      });
-
-      const json = await res.json().catch(() => ({}));
-      console.log("Balance history fetch:", res, json);
-
-      if (!res.ok) {
-        throw new Error(json.error || "Gagal mengambil riwayat saldo");
-      }
-
-      const newItems = json.items || [];
-      const newCursor = json.nextCursor || null;
-
-      if (isLoadMore) {
-        setItems((prev) => [...prev, ...newItems]);
-      } else {
-        setItems(newItems);
-      }
-      setNextCursor(newCursor);
-    } catch (err) {
-      console.error("[BalanceHistory] error:", err);
-      setError(err.message || "Gagal memuat riwayat saldo");
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchHistory(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const hasMore = !!nextCursor;
+  // 🔹 pakai hook global
+  const { items, loading, loadingMore, error, hasMore, loadMore } =
+    useBalanceHistory({ initData });
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -124,7 +75,7 @@ export default function BalanceHistoryPage() {
             {items.map((h) => {
               const style = BALANCE_CHANGE_STYLES[h.change_type] || {
                 label: h.change_type || "Mutasi",
-                icon: "🔁",
+                icon: null,
                 pillBg: "bg-zinc-700/30",
                 pillText: "text-zinc-200",
                 pillBorder: "border border-zinc-600/60",
@@ -137,13 +88,6 @@ export default function BalanceHistoryPage() {
                   : n < 0
                   ? "text-rose-400"
                   : "text-zinc-200";
-
-              const cardBorder =
-                n < 0
-                  ? "border-rose-700/70"
-                  : n > 0
-                  ? "border-emerald-700/70"
-                  : "border-zinc-800";
 
               const showMetadata =
                 h.metadata && Object.keys(h.metadata || {}).length > 0;
@@ -243,7 +187,7 @@ export default function BalanceHistoryPage() {
             {hasMore && (
               <div className="mt-3 flex justify-center">
                 <button
-                  onClick={() => fetchHistory(true)}
+                  onClick={loadMore}
                   className="text-[11px] px-3 py-1.5 rounded-full border border-zinc-700 text-zinc-200 bg-zinc-900/70 disabled:opacity-60"
                   disabled={loadingMore}
                 >

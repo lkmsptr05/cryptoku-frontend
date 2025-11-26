@@ -1,7 +1,7 @@
 // src/hooks/useGasEstimate.js
 import { useEffect, useState } from "react";
-
-const API_BASE = "https://cryptoku-backend-beige.vercel.app/api/estimate-gas";
+import { API_BASE_URL } from "../config/api";
+const API_BASE = `${API_BASE_URL}/estimate-gas`;
 
 /**
  * params:

@@ -11,6 +11,7 @@ import BalanceHistoryPage from "./pages/balance-history.jsx";
 import BottomNav from "./components/BottomNav";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import useTelegramAuth from "./hooks/useTelegramAuth";
+import { API_BASE_URL } from "./config/api";
 
 /* -------------------- Page Transition (simple fade) -------------------- */
 function PageTransition({ children }) {
@@ -85,20 +86,17 @@ export default function App() {
       try {
         setAuthLoading(true);
         setAuthError(null);
-        const res = await fetch(
-          "https://cryptoku-backend-beige.vercel.app/api/auth/telegram",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-telegram-init-data": initData,
-            },
-            body: JSON.stringify({ initData }),
-          }
-        );
+        const res = await fetch(`${API_BASE_URL}/auth/telegram`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-telegram-init-data": initData,
+          },
+          body: JSON.stringify({ initData }),
+        });
 
         const json = await res.json();
-
+        console.log(initData);
         if (!res.ok || !json?.success) {
           console.error("[Auth] Backend auth failed:", json);
           setAuthError("Gagal autentikasi dengan Telegram.");

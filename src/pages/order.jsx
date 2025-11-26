@@ -10,37 +10,7 @@ import OrderHistoryPopup from "../components/OrderHistoryPopup";
 import BannerBox from "../components/BannerBox";
 import { submitBuyOrder } from "../services/api";
 import useNotificationsBadge from "../hooks/useNotificationsBadge";
-
-// Dummy history sementara (nanti bisa diganti API)
-const DUMMY_HISTORY = [
-  {
-    id: "ORD-001",
-    symbol: "BTCUSDT",
-    side: "BUY",
-    amountUsd: 100,
-    amountToken: 0.0012,
-    priceUsd: 82000,
-    createdAt: "2025-01-01 12:10",
-    status: "Completed",
-  },
-  {
-    id: "ORD-002",
-    symbol: "ETHUSDT",
-    side: "BUY",
-    amountUsd: 50,
-    amountToken: 0.018,
-    priceUsd: 2800,
-    createdAt: "2025-01-02 09:32",
-    status: "Pending",
-  },
-];
-
-// endpoint daftar token yang dijual
-const TOKENS_API = "https://cryptoku-backend-beige.vercel.app/api/tokens";
-
-// endpoint estimasi gas
-const ESTIMATE_GAS_API =
-  "https://cryptoku-backend-beige.vercel.app/api/estimate-gas";
+import { API_BASE_URL } from "../config/api";
 
 const SERVICE_FEE_PERCENT = 4; // sudah termasuk Midtrans
 
@@ -130,7 +100,9 @@ function useGasEstimate({ networkKey, to, tokenAddress, enabled = true }) {
           params.append("tokenAddress", tokenAddress);
         }
 
-        const res = await fetch(`${ESTIMATE_GAS_API}?${params.toString()}`);
+        const res = await fetch(
+          `${API_BASE_URL}/estimate-gas?${params.toString()}`
+        );
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
         }
@@ -272,7 +244,7 @@ export default function Order() {
         setTokensLoading(true);
         setTokensError(null);
 
-        const res = await fetch(TOKENS_API);
+        const res = await fetch(`${API_BASE_URL}/tokens`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         const json = await res.json();

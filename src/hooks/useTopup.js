@@ -1,5 +1,6 @@
 // src/hooks/useTopup.js
 import { useCallback, useState } from "react";
+import { API_BASE_URL } from "../config/api";
 
 function getInitData() {
   const tgWebApp = window.Telegram?.WebApp;
@@ -59,7 +60,7 @@ export default function useTopup() {
 
       setLoading(true);
 
-      const res = await fetch("/api/topup/qris", {
+      const res = await fetch(`${API_BASE_URL}/api/topup/qris`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

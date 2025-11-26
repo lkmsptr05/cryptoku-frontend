@@ -11,9 +11,10 @@ import GlobalHeader from "../components/GlobalHeader";
 import { useNavigate } from "react-router-dom";
 import BannerBox from "../components/BannerBox";
 import useNotificationsBadge from "../hooks/useNotificationsBadge";
+import { API_BASE_URL } from "../config/api";
 
 /* -------------------- Constants -------------------- */
-const TOKENS_API = "https://cryptoku-backend-beige.vercel.app/api/tokens";
+// const TOKENS_API = "https://cryptoku-backend-beige.vercel.app/api/tokens";
 
 /* -------------------- Helpers -------------------- */
 
@@ -275,7 +276,7 @@ export default function Market() {
         setTokensLoading(true);
         setTokensError(null);
 
-        const res = await fetch(TOKENS_API);
+        const res = await fetch(`${API_BASE_URL}/tokens`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         const json = await res.json();
