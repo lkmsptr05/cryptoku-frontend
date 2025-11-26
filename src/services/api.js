@@ -2,7 +2,7 @@
 
 // Bisa nanti diganti ke env: import.meta.env.VITE_API_BASE_URL
 // Kalau tidak ada, fallback ke "/api" (reverse proxy dari frontend)
-const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || "/api";
+const API_BASE_URL = process.env.VITE_API_BASE_URL || "/api";
 
 /* -------------------------------------------------------------------------- */
 /*                                Helper Utils                                */
