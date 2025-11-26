@@ -22,7 +22,7 @@ export default function useNotificationsBadge(pollIntervalMs = 15000) {
           return;
         }
 
-        const res = await fetch(`${API_BASE_URL}/api/notifications`, {
+        const res = await fetch(`${API_BASE_URL}/notifications`, {
           headers: {
             "x-telegram-init-data": initData,
           },
