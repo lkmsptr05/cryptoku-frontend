@@ -85,14 +85,17 @@ export default function App() {
       try {
         setAuthLoading(true);
         setAuthError(null);
-        const res = await fetch("api/auth/telegram", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-telegram-init-data": initData,
-          },
-          body: JSON.stringify({ initData }),
-        });
+        const res = await fetch(
+          "https://cryptoku-backend-beige.vercel.app/api/auth/telegram",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-telegram-init-data": initData,
+            },
+            body: JSON.stringify({ initData }),
+          }
+        );
 
         const json = await res.json();
 
