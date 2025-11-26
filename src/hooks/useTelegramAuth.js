@@ -8,11 +8,11 @@ export default function useTelegramAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    WebApp.ready(); // kasih tau Telegram kalau WebApp siap
-    WebApp.expand(); // full height
+    WebApp.ready();
+    WebApp.expand();
 
     const u = WebApp.initDataUnsafe?.user || null;
-    const raw = WebApp.initData || ""; // string signed dari Telegram
+    const raw = WebApp.initData || "";
 
     setUser(u);
     setInitData(raw);

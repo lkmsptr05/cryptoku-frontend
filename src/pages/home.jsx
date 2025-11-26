@@ -2,15 +2,20 @@
 // src/pages/Home.jsx
 // ===============================
 import React, { useState, useEffect, useRef } from "react";
-import { ArrowUp, ArrowDown } from "lucide-react";
-import { getSystemHealth, getAllPrices } from "../services/api";
+import { ArrowUp, ArrowDown, Eye, EyeOff } from "lucide-react";
+import {
+  getSystemHealth,
+  getAllPrices,
+  getMyBalance,
+  getCryptoNews,
+} from "../services/api";
 import SystemHealthPopup from "../components/SystemHealthPopup";
 import { useTheme } from "../contexts/ThemeContext";
 import GlobalHeader from "../components/GlobalHeader";
-// import BannerBox from "../components/BannerBox"; // sudah tidak dipakai
+import useNotificationsBadge from "../hooks/useNotificationsBadge";
+import useTopup from "../hooks/useTopup";
+import TopUpModal from "../components/TopupModal";
 import { useNavigate } from "react-router-dom";
-
-const API_BASE = "https://cryptoku-backend-beige.vercel.app";
 
 const formatIDR = (n) => {
   const num = Number(n);
@@ -23,18 +28,34 @@ const formatIDR = (n) => {
 };
 
 // Home sekarang menerima telegramUser dari App.jsx
-export default function Home({ telegramUser }) {
-  const { amoled, toggleTheme } = useTheme();
+export default function Home({ telegramUser, initData }) {
+  const topup = useTopup();
   const navigate = useNavigate();
 
+  const { amoled, toggleTheme } = useTheme();
+  const { unreadCount } = useNotificationsBadge();
   const [health, setHealth] = useState([]);
   const [showPopup, setShowPopup] = useState(false);
   const [gainers, setGainers] = useState([]);
+
+  const [marketIndex, setMarketIndex] = useState([]);
+
+  // NEWS
+  const [news, setNews] = useState([]);
+  const [newsLoading, setNewsLoading] = useState(true);
+  const [newsError, setNewsError] = useState(null);
+  const [newsTab, setNewsTab] = useState("all");
 
   // saldo
   const [balance, setBalance] = useState(0);
   const [balanceLoading, setBalanceLoading] = useState(true);
   const [balanceError, setBalanceError] = useState(null);
+
+  // hide saldo
+  const [hideBalance, setHideBalance] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("cryptoku_hide_balance") === "1";
+  });
 
   // =============================
   // FLOATING HEADER STATE
@@ -55,6 +76,58 @@ export default function Home({ telegramUser }) {
     getSystemHealth()
       .then((res) => setHealth(res || []))
       .catch(console.error);
+  };
+
+  const calculateIndex = async () => {
+    const res = await getAllPrices();
+    const arr = Array.isArray(res) ? res : res?.data || [];
+
+    if (!arr || arr.length === 0) {
+      return {
+        index: 0,
+        sentiment: "Neutral",
+        color: "text-zinc-400",
+      };
+    }
+
+    const total = arr.reduce(
+      (acc, c) => acc + Number(c.priceChangePercent || 0),
+      0
+    );
+
+    const index = total / arr.length;
+
+    let sentiment = "Neutral";
+    let style =
+      "inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2 py-[2px] text-[10px] text-zinc-400 border border-zinc-500/30";
+    let arrow = "";
+    let animate = "h-1.5 w-1.5 rounded-full bg-zinc-400 animate-pulse";
+    let color = "text-zinc-400";
+
+    if (index > 1) {
+      sentiment = "Bullish";
+      arrow = "▲";
+      color = "text-emerald-400";
+      style =
+        "inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-[2px] text-[10px] text-emerald-400 border border-emerald-500/30";
+      animate = "h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse";
+    } else if (index < -1) {
+      sentiment = "Bearish";
+      arrow = "▼";
+      color = "text-red-400";
+      style =
+        "inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-[2px] text-[10px] text-red-400 border border-red-500/30";
+      animate = "h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse";
+    }
+
+    return {
+      index: Number(index.toFixed(2)),
+      sentiment,
+      style,
+      arrow,
+      animate,
+      color,
+    };
   };
 
   // =============================
@@ -84,16 +157,32 @@ export default function Home({ telegramUser }) {
     }
   };
 
+  const loadNews = async () => {
+    try {
+      setNewsLoading(true);
+      setNewsError(null);
+      const data = await getCryptoNews();
+      setNews(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error memuat berita:", err);
+      setNewsError(err.message || "Gagal memuat berita");
+      setNews([]);
+    } finally {
+      setNewsLoading(false);
+    }
+  };
+
   // =============================
   // INIT LOAD
   // =============================
   useEffect(() => {
     refreshHomeData();
     loadTopGainers();
+    loadNews();
   }, []);
 
   // =============================
-  // LOAD SALDO USER
+  // LOAD SALDO USER (pakai service)
   // =============================
   useEffect(() => {
     // kalau belum ada telegramUser (misal dev di browser biasa)
@@ -101,29 +190,17 @@ export default function Home({ telegramUser }) {
       setBalanceLoading(false);
       return;
     }
-
+    console.log(telegramUser);
     const load = async () => {
       try {
         setBalanceLoading(true);
         setBalanceError(null);
 
-        // versi simple: kirim user_id via query
-        const res = await fetch(
-          `${API_BASE}/api/me/balance?user_id=${telegramUser.id}`
-        );
-        const json = await res.json();
-
-        if (!res.ok || !json?.success) {
-          console.error("Get balance error:", json);
-          setBalanceError("Gagal memuat saldo");
-          setBalance(0);
-          return;
-        }
-
-        setBalance(json.data?.balance_available ?? 0);
+        const saldo = await getMyBalance(telegramUser.id);
+        setBalance(saldo);
       } catch (err) {
-        console.error("Fetch balance error:", err);
-        setBalanceError("Gagal menghubungi server");
+        console.error("Get balance error:", err);
+        setBalanceError(err.message || "Gagal memuat saldo");
         setBalance(0);
       } finally {
         setBalanceLoading(false);
@@ -132,6 +209,26 @@ export default function Home({ telegramUser }) {
 
     load();
   }, [telegramUser?.id]);
+
+  useEffect(() => {
+    async function loadIndex() {
+      const result = await calculateIndex();
+      setMarketIndex(result);
+    }
+
+    loadIndex();
+  }, []);
+
+  // =============================
+  // HIDE BALANCE
+  // =============================
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(
+      "cryptoku_hide_balance",
+      hideBalance ? "1" : "0"
+    );
+  }, [hideBalance]);
 
   // =============================
   // SCROLL LISTENER UNTUK FLOATING HEADER
@@ -168,19 +265,60 @@ export default function Home({ telegramUser }) {
     telegramUser?.first_name || telegramUser?.username || "Pengguna CryptoKu";
 
   const username = telegramUser?.username ? `@${telegramUser.username}` : null;
-
-  const handleTopup = () => {
-    // nanti bisa diarahkan ke halaman/topup flow
-    console.log("Top Up clicked");
-    // contoh:
-    // navigate("/profile", { state: { section: "topup" } });
-  };
+  const avatar = telegramUser?.photo_url
+    ? telegramUser?.photo_url
+    : "/default-profile.png";
 
   const handleHistory = () => {
     console.log("History saldo clicked");
     // contoh:
     // navigate("/profile", { state: { section: "balance-history" } });
   };
+
+  const filteredNews = news.filter((item) => {
+    if (newsTab === "all") return true;
+
+    const text = (
+      (item.title_id || item.title || "") +
+      " " +
+      (item.description_id || item.description || "")
+    ).toLowerCase();
+
+    if (newsTab === "bitcoin") {
+      return text.includes("bitcoin") || text.includes("btc");
+    }
+    if (newsTab === "ethereum") {
+      return text.includes("ethereum") || text.includes("eth");
+    }
+    if (newsTab === "defi") {
+      return (
+        text.includes("defi") || text.includes("de-fi") || text.includes("nft")
+      );
+    }
+    return true;
+  });
+
+  function getNewsCategory(item) {
+    const text = (
+      (item.title_id || item.title || "") +
+      " " +
+      (item.description_id || item.description || "")
+    ).toLowerCase();
+
+    if (text.includes("bitcoin") || text.includes("btc")) return "BTC";
+    if (text.includes("ethereum") || text.includes("eth")) return "ETH";
+    if (text.includes("defi") || text.includes("nft")) return "DeFi/NFT";
+    return "Umum";
+  }
+
+  function isBreaking(item) {
+    if (!item.publishedAt) return false;
+    const published = new Date(item.publishedAt).getTime();
+    if (Number.isNaN(published)) return false;
+    const diffMs = Date.now() - published;
+    const diffHours = diffMs / (1000 * 60 * 60);
+    return diffHours <= 2; // ≤ 2 jam => Breaking
+  }
 
   return (
     <div
@@ -215,6 +353,7 @@ export default function Home({ telegramUser }) {
               subtitle="Beranda"
               onToggleTheme={toggleTheme}
               theme={amoled ? "amoled" : "dark"}
+              unreadCount={unreadCount}
             />
           </div>
         </div>
@@ -225,6 +364,7 @@ export default function Home({ telegramUser }) {
       ============================ */}
       <div className="max-w-md mx-auto space-y-5">
         {/* ====== BANNER: NAMA + SALDO + TOMBOL ====== */}
+
         <section className="mt-6">
           <div
             className={`
@@ -238,42 +378,71 @@ export default function Home({ telegramUser }) {
             `}
           >
             {/* baris atas: salam + username + avatar */}
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <div>
-                <p className="text-[11px] text-zinc-400">Selamat datang,</p>
-                <p className="text-sm font-semibold text-white">{name}</p>
-                {username && (
-                  <p className="text-[11px] text-zinc-500 mt-[2px]">
-                    {username}
-                  </p>
-                )}
+            <div className="flex justify-between">
+              <div className="flex items-start justify-between">
+                {/* KIRI: Greeting + fullname saja */}
+                <div>
+                  <p className="text-sm text-zinc-400">Selamat datang,</p>
+                  <p className="text-lg font-semibold">{name}</p>
+                </div>
+
+                {/* KANAN: Foto + Username di bawahnya */}
               </div>
 
-              {telegramUser?.photo_url && (
+              <div className="flex flex-col items-center text-center">
                 <img
-                  src={telegramUser.photo_url}
+                  src={avatar}
                   alt="Avatar"
-                  className="w-10 h-10 rounded-full border border-zinc-700 object-cover"
-                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    e.currentTarget.src = "/default-profile.png";
+                  }}
+                  className="w-16 h-16 rounded-full object-cover border border-zinc-700"
                 />
-              )}
+
+                {username && (
+                  <p className="text-[11px] text-zinc-400">{username}</p>
+                )}
+              </div>
             </div>
 
             {/* saldo */}
-            <div className="mt-2 mb-3">
+            <div>
+              {/* Label */}
               <p className="text-[11px] text-zinc-400">Saldo IDR</p>
-              <p className="text-xl font-bold tracking-tight mt-1">
-                {balanceLoading ? (
-                  <span className="inline-flex items-center gap-2">
-                    <span className="w-4 h-4 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
-                    <span className="text-zinc-400 text-[13px]">
-                      Memuat saldo...
+
+              {/* Baris: Saldo + icon mata */}
+              <div className="flex items-center gap-2">
+                <p className="text-xl font-bold tracking-tight">
+                  {balanceLoading ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="w-4 h-4 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
+                      <span className="text-zinc-400 text-[13px]">
+                        Memuat saldo...
+                      </span>
                     </span>
-                  </span>
-                ) : (
-                  formatIDR(balance)
-                )}
-              </p>
+                  ) : hideBalance ? (
+                    "••••••"
+                  ) : (
+                    formatIDR(balance)
+                  )}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => setHideBalance((v) => !v)}
+                  className="inline-flex items-center justify-center w-7 h-7 rounded-full
+                
+                 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800
+                 transition-colors"
+                >
+                  {hideBalance ? (
+                    <EyeOff className="w-3.5 h-3.5" />
+                  ) : (
+                    <Eye className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+
               {balanceError && (
                 <p className="text-[11px] text-amber-400 mt-1">
                   {balanceError}
@@ -285,7 +454,7 @@ export default function Home({ telegramUser }) {
             <div className="flex items-center gap-2 mt-2">
               <button
                 type="button"
-                onClick={handleTopup}
+                onClick={topup.open}
                 className="flex-1 py-2 rounded-2xl text-xs font-semibold 
                   bg-emerald-500 text-black
                   hover:bg-emerald-400
@@ -294,10 +463,10 @@ export default function Home({ telegramUser }) {
               >
                 Top Up Saldo
               </button>
-
+              <TopUpModal topup={topup} />
               <button
                 type="button"
-                onClick={handleHistory}
+                onClick={() => navigate("/balance/history")}
                 className="flex-1 py-2 rounded-2xl text-xs font-medium 
                   border border-zinc-700
                   text-zinc-200 bg-zinc-900/60
@@ -321,7 +490,9 @@ export default function Home({ telegramUser }) {
             }`}
           >
             <p className="text-xs text-zinc-400 mb-1 flex items-center justify-between">
-              <span>System Health</span>
+              <p className="text-xs text-zinc-400 uppercase tracking-[0.18em]">
+                System Health
+              </p>
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-[2px] text-[10px] text-emerald-400 border border-emerald-500/30">
                 Live
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -339,27 +510,59 @@ export default function Home({ telegramUser }) {
               amoled ? "bg-black/40" : "bg-zinc-900/80"
             }`}
           >
-            <p className="text-xs text-zinc-400 mb-1">Index Crypto</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-emerald-400 text-xl font-bold flex items-center gap-1">
-                ▲ 2.41%
+            {/* Header */}
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-zinc-400 uppercase tracking-[0.18em]">
+                CryptoKu Index
+              </p>
+
+              <span className={`${marketIndex.style}`}>
+                {marketIndex.sentiment}
+                <span className={marketIndex.animate} />
               </span>
             </div>
-            <p className="text-[11px] text-zinc-500 mt-1">
-              Performa rata-rata market 24 jam
-            </p>
+
+            {/* Index value */}
+            <div className="flex items-end gap-2">
+              <p
+                className={`text-xl font-bold ${marketIndex.color} tracking-tight`}
+              >
+                {marketIndex.arrow} {marketIndex.index}%
+              </p>
+              <span className="text-[11px] text-zinc-500 mb-[2px]">
+                / 24 jam
+              </span>
+            </div>
+
+            {/* Progress Indicator bar */}
+            <div className="mt-2 w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+              <div
+                className={`h-full ${
+                  marketIndex.index >= 0
+                    ? "bg-gradient-to-r from-emerald-500 to-emerald-300"
+                    : "bg-gradient-to-r from-red-500 to-rose-300"
+                }`}
+                style={{
+                  width: `${Math.min(Math.abs(marketIndex.index) * 10, 100)}%`,
+                }}
+              />
+            </div>
           </div>
         </div>
 
         {/* ======================
             REAL TOP 3 GAINERS
         ======================= */}
+        {/* ======================
+    REAL TOP 3 GAINERS
+======================= */}
         <div
-          className={`rounded-2xl border border-zinc-800 shadow-md ${
+          className={`rounded-2xl border border-zinc-800 shadow-md overflow-hidden ${
             amoled ? "bg-black/40" : "bg-zinc-900/80"
           }`}
         >
-          <div className="flex items-center justify-between px-4 pt-4 pb-3">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-zinc-800/70">
             <div>
               <p className="text-xs text-zinc-400 mb-1 uppercase tracking-[0.18em]">
                 Top Gainers
@@ -368,75 +571,210 @@ export default function Home({ telegramUser }) {
                 3 token dengan kenaikan tertinggi 24 jam
               </p>
             </div>
+            <span className="text-[10px] px-2 py-[3px] rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-300">
+              24H
+            </span>
           </div>
 
-          <div className="px-4 pb-4">
-            {gainers.length === 0 ? (
-              <p className="text-zinc-500 text-center py-4 text-sm">
-                Memuat data…
-              </p>
-            ) : (
-              <div className="flex flex-col divide-y divide-zinc-800">
-                {gainers.map((t, i) => (
+          {/* Body */}
+          <div className="grid grid-cols-1 gap-0">
+            {gainers.map((t, i) => (
+              <div
+                key={i}
+                className={`rounded-b-2xl border-b border-zinc-800 ${
+                  amoled ? "bg-black/40" : "bg-zinc-900/80"
+                } p-4`}
+              >
+                {/* BARIS ATAS */}
+                <div className="flex items-center justify-between">
+                  <p className="font-semibold text-sm text-zinc-100">
+                    {formatPair(t.symbol)}
+                  </p>
+
+                  <p className="font-semibold text-sm text-zinc-100">
+                    ${t.price_usd}
+                  </p>
+                </div>
+
+                {/* BARIS BAWAH */}
+                <div className="mt-1 flex items-center justify-between">
+                  <p className="text-[11px] text-zinc-500">
+                    Rp {t.price_idr.toLocaleString("id-ID")}
+                  </p>
+
                   <div
-                    key={i}
-                    className="flex items-center justify-between py-3 first:pt-1"
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-[3px] text-[11px] font-semibold border ${
+                      t.priceChangePercent >= 0
+                        ? "text-emerald-400 border-emerald-500/40 bg-emerald-500/10"
+                        : "text-red-400 border-red-500/40 bg-red-500/10"
+                    }`}
                   >
-                    {/* LEFT SIDE */}
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-sm">
-                          {formatPair(t.symbol)}
-                        </p>
-                        <span className="text-[11px] text-zinc-500">
-                          #{i + 1}
-                        </span>
-                      </div>
-
-                      <p className="text-sm font-semibold mt-[2px]">
-                        ${t.price_usd.toLocaleString()}
-                      </p>
-
-                      <p className="text-[11px] text-zinc-500 mt-[1px]">
-                        Rp {t.price_idr.toLocaleString("id-ID")}
-                      </p>
-                    </div>
-
-                    {/* RIGHT SIDE */}
-                    <div
-                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold border ${
-                        t.priceChangePercent >= 0
-                          ? "text-emerald-400 border-emerald-500/40 bg-emerald-500/5"
-                          : "text-red-400 border-red-500/40 bg-red-500/5"
-                      }`}
-                    >
-                      {t.priceChangePercent >= 0 ? (
-                        <ArrowUp size={14} />
-                      ) : (
-                        <ArrowDown size={14} />
-                      )}
-                      <span>{Math.abs(t.priceChangePercent).toFixed(2)}%</span>
-                    </div>
+                    {t.priceChangePercent >= 0 ? (
+                      <ArrowUp size={12} />
+                    ) : (
+                      <ArrowDown size={12} />
+                    )}
+                    <span>{Math.abs(t.priceChangePercent).toFixed(2)}%</span>
                   </div>
-                ))}
+                </div>
               </div>
-            )}
+            ))}
           </div>
         </div>
 
-        {/* Berita */}
+        {/* Berita Crypto (mini tab + thumbnail + badge) */}
         <div
           className={`rounded-2xl border border-zinc-800 shadow-md ${
             amoled ? "bg-black/40" : "bg-zinc-900/80"
           } p-4 mb-10`}
         >
-          <p className="text-xs text-zinc-400 mb-1 uppercase tracking-[0.18em]">
-            Berita Crypto
-          </p>
-          <p className="text-sm text-zinc-300 mb-1">Coming soon…</p>
-          <p className="text-[11px] text-zinc-500">
-            Nantinya, update berita market dan on-chain bisa tampil di sini.
-          </p>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs text-zinc-400 uppercase tracking-[0.18em]">
+                Berita Crypto
+              </p>
+            </div>
+
+            {/* mini tabs */}
+            <div className="flex items-center gap-1.5 text-[10px]">
+              {[
+                { id: "all", label: "Semua" },
+                { id: "bitcoin", label: "BTC" },
+                { id: "ethereum", label: "ETH" },
+                { id: "defi", label: "DeFi/NFT" },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setNewsTab(tab.id)}
+                  className={`px-2.5 py-[3px] rounded-full border text-[10px] transition
+                    ${
+                      newsTab === tab.id
+                        ? "bg-emerald-500/15 border-emerald-500/60 text-emerald-300"
+                        : "bg-zinc-900/70 border-zinc-700 text-zinc-400"
+                    }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Loading */}
+          {newsLoading && !newsError && (
+            <div className="space-y-2 mt-2">
+              <div className="h-3 w-40 bg-zinc-800 rounded animate-pulse" />
+              <div className="h-3 w-full bg-zinc-900 rounded animate-pulse" />
+              <div className="h-3 w-3/4 bg-zinc-900 rounded animate-pulse" />
+            </div>
+          )}
+
+          {/* Error */}
+          {!newsLoading && newsError && (
+            <p className="text-[11px] text-amber-400 mt-2">{newsError}</p>
+          )}
+
+          {/* No news */}
+          {!newsLoading &&
+            !newsError &&
+            filteredNews.length === 0 &&
+            news.length > 0 && (
+              <p className="text-[11px] text-zinc-500 mt-2">
+                Belum ada berita untuk kategori ini.
+              </p>
+            )}
+
+          {!newsLoading && !newsError && news.length === 0 && (
+            <p className="text-[11px] text-zinc-500 mt-2">
+              Belum ada berita untuk ditampilkan.
+            </p>
+          )}
+
+          {/* List berita */}
+          {!newsLoading && !newsError && filteredNews.length > 0 && (
+            <div className="mt-2 space-y-3">
+              {filteredNews.map((item) => {
+                const category = getNewsCategory(item);
+                const breaking = isBreaking(item);
+
+                return (
+                  <button
+                    key={item.url}
+                    type="button"
+                    className="w-full text-left group"
+                    onClick={() => {
+                      if (!item.url) return;
+                      window.open(item.url, "_blank");
+                    }}
+                  >
+                    <div className="flex gap-3 pb-3 border-b border-zinc-800/60 last:border-b-0 group-active:scale-[0.99] transition-transform">
+                      {/* Thumbnail */}
+                      {item.urlToImage ? (
+                        <div className="w-[68px] h-[68px] flex-shrink-0 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+                          <img
+                            src={item.urlToImage}
+                            alt={item.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-150"
+                            loading="lazy"
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-[68px] h-[68px] flex-shrink-0 rounded-xl bg-zinc-800/70 border border-zinc-700/80 flex items-center justify-center text-[11px] text-zinc-400">
+                          No Img
+                        </div>
+                      )}
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-[10px] px-2 py-[1px] rounded-full bg-zinc-900 border border-zinc-700 text-zinc-400">
+                            {category}
+                          </span>
+                          {breaking && (
+                            <span className="text-[10px] px-2 py-[1px] rounded-full bg-rose-600/15 border border-rose-500/60 text-rose-300">
+                              🔥 Breaking
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-[13px] font-medium text-zinc-100 group-hover:text-emerald-300 line-clamp-2">
+                          {item.title_id || item.title}
+                        </p>
+
+                        {(item.description_id || item.description) && (
+                          <p className="text-[11px] text-zinc-400 mt-1 line-clamp-2">
+                            {item.description_id || item.description}
+                          </p>
+                        )}
+
+                        <div className="mt-1 flex items-center justify-between text-[10px] text-zinc-500">
+                          <span className="truncate">
+                            {item.source?.name || "NewsAPI"}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            {item.publishedAt && (
+                              <span>
+                                {new Date(item.publishedAt).toLocaleDateString(
+                                  "id-ID",
+                                  {
+                                    day: "2-digit",
+                                    month: "short",
+                                  }
+                                )}
+                              </span>
+                            )}
+                            <span className="opacity-60 group-hover:opacity-100">
+                              ↗
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 

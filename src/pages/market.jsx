@@ -10,6 +10,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import GlobalHeader from "../components/GlobalHeader";
 import { useNavigate } from "react-router-dom";
 import BannerBox from "../components/BannerBox";
+import useNotificationsBadge from "../hooks/useNotificationsBadge";
 
 /* -------------------- Constants -------------------- */
 const TOKENS_API = "https://cryptoku-backend-beige.vercel.app/api/tokens";
@@ -85,14 +86,7 @@ const formatTime = (ts) => {
 };
 
 /* -------------------- PriceItem -------------------- */
-function PriceItem({
-  item,
-  previous,
-  amoled,
-  translateForItem = 0,
-  onClick,
-  isSupported,
-}) {
+function PriceItem({ item, previous, amoled, translateForItem = 0, onClick }) {
   const change = Number(item.priceChangePercent) || 0;
   const positive = change > 0;
   const negative = change < 0;
@@ -119,8 +113,7 @@ function PriceItem({
   return (
     <button
       type="button"
-      onClick={isSupported ? onClick : undefined}
-      disabled={!isSupported}
+      onClick={onClick}
       ref={refFlash}
       style={{
         transform: `translateY(${translateForItem}px)`,
@@ -135,7 +128,6 @@ function PriceItem({
             : "bg-zinc-900/75 border-zinc-800"
         }
         active:scale-[0.99]
-        ${!isSupported ? "opacity-50 cursor-not-allowed" : ""}
       `}
     >
       <div className="flex items-center justify-between gap-3">
@@ -151,13 +143,13 @@ function PriceItem({
             </div>
 
             {/* placeholder agar tinggi stabil */}
-            <div className="text-[10px] mt-1 min-h-[14px]">
+            {/* <div className="text-[10px] mt-1 min-h-[14px]">
               {!isSupported && (
                 <div className="absolute bottom-2 left-2 text-[10px] px-2 py-[2px] rounded-full bg-amber-500/20 text-amber-400">
                   Coming Soon
                 </div>
               )}
-            </div>
+            </div> */}
           </div>
         </div>
 
@@ -201,7 +193,7 @@ function PriceItem({
 export default function Market() {
   const { amoled, toggleTheme } = useTheme();
   const navigate = useNavigate();
-
+  const { unreadCount } = useNotificationsBadge();
   const [prices, setPrices] = useState([]);
   const [previousPrices, setPreviousPrices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -517,6 +509,7 @@ export default function Market() {
               subtitle="Harga crypto real-time"
               onToggleTheme={toggleTheme}
               theme={amoled ? "amoled" : "dark"}
+              unreadCount={unreadCount}
             />
           </div>
         </div>
@@ -531,7 +524,7 @@ export default function Market() {
           // Gunakan nilai dari state yang sudah diselesaikan
           title={titleText}
           description="Pantau market dan ambil peluang trading terbaik."
-          accent="blue"
+          accent="emerald"
         />
 
         {/* Info bar: last updated */}
@@ -541,7 +534,7 @@ export default function Market() {
         </div>
 
         {/* Info bar token support */}
-        <div className="flex items-center justify-between text-[11px] text-zinc-500 mb-2">
+        {/* <div className="flex items-center justify-between text-[11px] text-zinc-500 mb-2">
           <span>Token tersedia di CryptoKu</span>
           <span>
             {tokensLoading
@@ -550,7 +543,7 @@ export default function Market() {
               ? "Gagal memuat"
               : `${supportedTokens.length} token`}
           </span>
-        </div>
+        </div> */}
 
         {/* Pull-to-refresh indicator */}
         <div

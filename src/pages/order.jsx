@@ -8,6 +8,8 @@ import { useTheme } from "../contexts/ThemeContext";
 import GlobalHeader from "../components/GlobalHeader";
 import OrderHistoryPopup from "../components/OrderHistoryPopup";
 import BannerBox from "../components/BannerBox";
+import { submitBuyOrder } from "../services/api";
+import useNotificationsBadge from "../hooks/useNotificationsBadge";
 
 // Dummy history sementara (nanti bisa diganti API)
 const DUMMY_HISTORY = [
@@ -179,8 +181,12 @@ export default function Order() {
   const { amoled, toggleTheme } = useTheme();
   const { state } = useLocation();
   const navigate = useNavigate();
-
+  const { unreadCount } = useNotificationsBadge();
   const token = state?.token || null;
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [lastOrder, setLastOrder] = useState(null);
 
   // dropdown state
   const [isNetworkDropdownOpen, setIsNetworkDropdownOpen] = useState(false);
@@ -399,29 +405,55 @@ export default function Order() {
     e.preventDefault();
     if (!canSubmitBuy) return;
 
-    // tahap 1: buka preview modal dulu
+    setSubmitError("");
     setShowPreview(true);
   };
 
-  const handleConfirmBuy = () => {
-    if (!canSubmitBuy) return;
+  const handleConfirmBuy = async () => {
+    if (!canSubmitBuy || isSubmitting) return;
 
-    // tahap 2: di sini nanti sambungkan ke API order backend
-    console.log("CONFIRM BUY", {
-      marketToken: token,
-      backendToken: selectedBackendToken,
-      toAddress,
-      amountIdr,
-      amountUsd,
-      serviceFeeUsd,
-      gasFeeUsd,
-      usdAfterFee,
-      estimatedToken,
-      gasData,
-    });
+    setSubmitError("");
+    setIsSubmitting(true);
 
-    // setelah sukses (atau setelah panggil API), tutup modal
-    setShowPreview(false);
+    try {
+      // Pastikan simbol yang dipakai sama dengan yang ada di crypto_prices
+      // Sesuaikan dengan struktur datamu:
+      // - kalau supported_tokens punya field "symbol" → pakai itu
+      // - kalau token yang dipilih sudah "BTC", "ETH", dll → boleh pakai token.symbol
+      const tokenSymbol = token
+        ? token.symbol
+        : selectedBackendToken.price_symbol;
+      if (!tokenSymbol) {
+        throw new Error("Symbol token tidak ditemukan di konfigurasi.");
+      }
+
+      const order = await submitBuyOrder(
+        tokenSymbol,
+        selectedBackendToken.network_key, // networkKey
+        Number(amountIdr), // amountIdr (pastikan number)
+        toAddress.trim() // toAddress
+      );
+
+      // simpan order terakhir kalau mau dipakai di UI
+      setLastOrder(order);
+
+      // tutup preview
+      setShowPreview(false);
+
+      // optional: kasih feedback ke user
+      const tgWebApp = window.Telegram?.WebApp;
+      if (tgWebApp?.showAlert) {
+        tgWebApp.showAlert("Order pembelian sedang diproses ✅");
+      }
+
+      // TODO (optional): panggil fungsi refresh saldo di Home/Profile kalau kamu punya,
+      // misalnya: await reloadBalance()
+    } catch (err) {
+      console.error("CONFIRM BUY FAILED:", err);
+      setSubmitError(err.message || "Gagal mengirim order beli");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const buttonLabelToken =
@@ -464,6 +496,7 @@ export default function Order() {
               }
               onToggleTheme={toggleTheme}
               theme={amoled ? "amoled" : "dark"}
+              unreadCount={unreadCount}
             />
           </div>
         </div>
@@ -477,7 +510,7 @@ export default function Order() {
           label="Tips"
           title="Waktu terbaik membeli"
           description="Biasanya harga lebih stabil saat volume rendah."
-          accent="purple"
+          accent="emerald"
         />
 
         {/* ====== MODE TANPA TOKEN: Dashboard 3 Card + History popup ====== */}

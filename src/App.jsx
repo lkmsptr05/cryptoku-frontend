@@ -5,16 +5,19 @@ import Home from "./pages/home";
 import Order from "./pages/order";
 import Market from "./pages/market";
 import Profile from "./pages/profile";
+import NotificationsPage from "./pages/notifications";
+import BalanceHistoryPage from "./pages/balance-history.jsx";
+
 import BottomNav from "./components/BottomNav";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import useTelegramAuth from "./hooks/useTelegramAuth"; // pastikan path ini sesuai struktur proyekmu
+import useTelegramAuth from "./hooks/useTelegramAuth";
 
-/* -------------------- Page Transition -------------------- */
+/* -------------------- Page Transition (simple fade) -------------------- */
 function PageTransition({ children }) {
   return (
     <div
       style={{
-        animation: "fadeIn 240ms ease",
+        animation: "fadeOpacity 500ms ease",
       }}
     >
       {children}
@@ -23,21 +26,33 @@ function PageTransition({ children }) {
 }
 
 /* -------------------- Router Wrapper -------------------- */
-/**
- * RouterWrapper sekarang menerima `telegramUser` sebagai props
- * supaya bisa diteruskan ke <Home />.
- */
-function RouterWrapper({ telegramUser }) {
+function RouterWrapper({ telegramUser, initData }) {
   const location = useLocation();
 
   return (
     <>
       <PageTransition key={location.pathname}>
         <Routes location={location}>
-          <Route path="/" element={<Home telegramUser={telegramUser} />} />
-          <Route path="/market" element={<Market />} />
-          <Route path="/order" element={<Order />} />
-          <Route path="/profile" element={<Profile />} />
+          <Route
+            path="/"
+            element={<Home telegramUser={telegramUser} initData={initData} />}
+          />
+          <Route
+            path="/market"
+            element={<Market telegramUser={telegramUser} initData={initData} />}
+          />
+          <Route
+            path="/order"
+            element={<Order telegramUser={telegramUser} initData={initData} />}
+          />
+          <Route
+            path="/profile"
+            element={
+              <Profile telegramUser={telegramUser} initData={initData} />
+            }
+          />
+          <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/balance/history" element={<BalanceHistoryPage />} />
         </Routes>
       </PageTransition>
       <BottomNav />
@@ -66,22 +81,18 @@ export default function App() {
       return;
     }
 
-    // kirim initData ke backend untuk diverifikasi & disimpan
     const run = async () => {
       try {
         setAuthLoading(true);
         setAuthError(null);
-
-        const res = await fetch(
-          "https://cryptoku-backend-beige.vercel.app/api/auth/telegram",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ initData }),
-          }
-        );
+        const res = await fetch("api/auth/telegram", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-telegram-init-data": initData,
+          },
+          body: JSON.stringify({ initData }),
+        });
 
         const json = await res.json();
 
@@ -119,22 +130,41 @@ export default function App() {
     );
   }
 
-  // Kalau mau strict: bisa blokir akses kalau authError != null
-  // Untuk sekarang: cuma kasih warning, app tetap bisa jalan
-  // Nanti bisa kamu ganti sesuai kebutuhan (misal harus Telegram only)
+  // STRICT MODE: hanya boleh buka dari Telegram
+  if (!authedUser) {
+    return (
+      <ThemeProvider>
+        <div className="min-h-screen flex items-center justify-center bg-black text-white px-4 text-center">
+          <div className="max-w-sm w-full space-y-4">
+            <h1 className="text-xl font-semibold text-red-400">
+              Akses Ditolak
+            </h1>
+
+            <p className="text-sm text-gray-400">
+              CryptoKu hanya bisa dibuka melalui aplikasi Telegram.
+            </p>
+
+            <p className="text-xs text-gray-500">
+              Buka bot resmi kami lalu tekan tombol <b>Open App</b>
+            </p>
+
+            <a
+              href="https://t.me/GoCryptoku_bot"
+              className="inline-block w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg"
+            >
+              Buka di Telegram
+            </a>
+          </div>
+        </div>
+      </ThemeProvider>
+    );
+  }
+
+  // App normal
   return (
     <ThemeProvider>
       <BrowserRouter>
-        {authError && (
-          <div className="fixed top-0 inset-x-0 z-50 px-4 pt-4">
-            <div className="max-w-md mx-auto text-xs text-amber-300 bg-amber-900/30 border border-amber-700/60 rounded-xl px-3 py-2">
-              {authError} · App tetap bisa dibuka, tetapi beberapa fitur mungkin
-              terbatas.
-            </div>
-          </div>
-        )}
-
-        <RouterWrapper telegramUser={authedUser || user || null} />
+        <RouterWrapper telegramUser={authedUser || user} initData={initData} />
       </BrowserRouter>
     </ThemeProvider>
   );
