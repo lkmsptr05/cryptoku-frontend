@@ -62,4 +62,11 @@ export const BALANCE_CHANGE_STYLES = {
     pillBorder: "border border-sky-500/60",
     amountClass: "text-sky-300",
   },
+  reward: {
+    label: "Reward",
+    icon: GiftIcon,
+    pillBg: "bg-emerald-900/40",
+    pillText: "text-emerald-200",
+    pillBorder: "border border-emerald-500/60",
+  },
 };
