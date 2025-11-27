@@ -107,6 +107,24 @@ export default function BalanceHistoryPage() {
       );
     }
 
+    if (h.change_type === "reward") {
+      return (
+        <div className="mt-1.5 text-[11px] bg-zinc-950/80 rounded-lg p-2 border border-emerald-700/70 space-y-1.5">
+          <p className="text-emerald-300 font-medium">
+            Hadiah saldo dari CryptoKu.
+          </p>
+
+          <ul className="list-disc list-inside space-y-0.5 text-emerald-100/90">
+            {meta.message && <li>{meta.message}</li>}
+            {meta.reason && <li>Alasan: {meta.reason}</li>}
+            {h.related_topup_id && (
+              <li>ID Reward/Topup: #{h.related_topup_id}</li>
+            )}
+          </ul>
+        </div>
+      );
+    }
+
     // 🔹 BUY LOCK
     if (h.change_type === "buy_lock") {
       const pair = formatTokenPair(meta);
