@@ -11,14 +11,12 @@ export default function useNotifications() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  console.log("halloooo?");
   const fetchNotifications = async () => {
     try {
       setLoading(true);
       setError("");
 
       const data = await getNotifications(); // dari services/api
-      console.log(data);
       setItems(data || []);
     } catch (err) {
       console.error("[useNotifications] error:", err);

@@ -17,13 +17,12 @@ function getInitData() {
  */
 export default function useTopup() {
   const [isOpen, setIsOpen] = useState(false);
-  const [amountIdr, setAmountIdr] = useState("");
+  const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const [orderId, setOrderId] = useState(null);
   const [qrUrl, setQrUrl] = useState(null);
   const [qrString, setQrString] = useState(null);
   const [error, setError] = useState(null);
-
   const open = useCallback(() => {
     setIsOpen(true);
     setError(null);
@@ -31,7 +30,7 @@ export default function useTopup() {
 
   const close = useCallback(() => {
     setIsOpen(false);
-    setAmountIdr("");
+    setAmount("");
     setLoading(false);
     setOrderId(null);
     setQrUrl(null);
@@ -42,8 +41,7 @@ export default function useTopup() {
   const submit = useCallback(async () => {
     try {
       setError(null);
-
-      const parsed = Number(amountIdr);
+      const parsed = Number(amount);
       if (!parsed || parsed <= 0) {
         throw new Error("Nominal top up tidak valid.");
       }
@@ -60,7 +58,7 @@ export default function useTopup() {
 
       setLoading(true);
 
-      const res = await fetch(`${API_BASE_URL}/api/topup/qris`, {
+      const res = await fetch(`${API_BASE_URL}/topup/qris`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -89,10 +87,10 @@ export default function useTopup() {
     } finally {
       setLoading(false);
     }
-  }, [amountIdr]);
+  }, [amount]);
 
   const reset = useCallback(() => {
-    setAmountIdr("");
+    setAmount("");
     setOrderId(null);
     setQrUrl(null);
     setQrString(null);
@@ -102,7 +100,7 @@ export default function useTopup() {
   return {
     // state
     isOpen,
-    amountIdr,
+    amount,
     loading,
     orderId,
     qrUrl,
@@ -113,7 +111,7 @@ export default function useTopup() {
     open,
     close,
     submit,
-    setAmountIdr,
+    setAmount,
     reset,
   };
 }

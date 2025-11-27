@@ -9,6 +9,8 @@ export default function TopUpModal({ topup }) {
   const {
     isOpen,
     loading,
+    amount,
+    setAmount,
     orderId,
     qrUrl,
     qrString,
@@ -17,11 +19,10 @@ export default function TopUpModal({ topup }) {
     close,
     reset,
   } = topup;
-  const [amountIdr, setAmountIdr] = useState("");
-  const amountIdrNumber = amountIdr ? Number(amountIdr) : 0;
+  const amountNumber = amount ? Number(amount) : 0;
   const hasQR = !!qrUrl || !!qrString;
-  const formattedAmountIdr = amountIdrNumber
-    ? `Rp ${amountIdrNumber.toLocaleString("id-ID")}`
+  const formattedamount = amountNumber
+    ? `Rp ${amountNumber.toLocaleString("id-ID")}`
     : "";
   return (
     <AnimatePresence>
@@ -71,17 +72,18 @@ export default function TopUpModal({ topup }) {
                   <label className="block text-xs text-zinc-400 mb-1">
                     Nominal (IDR)
                   </label>
+                  <input type="number" hidden />
                   <input
                     type="text"
                     min={1000}
                     className="w-full rounded-xl bg-zinc-900 px-3 py-2 text-sm text-white outline-none border border-zinc-700 focus:border-emerald-500/90 focus:ring-1 focus:ring-emerald-500/40 transition-all"
                     inputMode="numeric"
                     placeholder="Rp 100.000"
-                    value={formattedAmountIdr}
+                    value={formattedamount}
                     onChange={(e) => {
                       // Ambil hanya digit 0–9
                       const raw = e.target.value.replace(/[^0-9]/g, "");
-                      setAmountIdr(raw);
+                      setAmount(raw);
                     }}
                   />
 

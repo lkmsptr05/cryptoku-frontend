@@ -38,7 +38,8 @@ export async function request(
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
   const url = `${API_BASE_URL}${cleanPath}`;
 
-  console.log("API FETCH:", finalOptions.method, url);
+  // Untuk debugging, tampilkan info request di console
+  // console.log("API FETCH:", finalOptions.method, url);
 
   const res = await fetch(url, finalOptions);
 

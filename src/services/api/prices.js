@@ -2,7 +2,6 @@ import { request } from "../request";
 
 export async function getAllPrices() {
   const { res, data } = await request("/prices");
-  console.log(data);
   if (!res.ok || data.error) {
     throw new Error(data.error?.message || "Gagal mengambil semua harga.");
   }

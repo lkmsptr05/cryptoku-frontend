@@ -335,13 +335,6 @@ export default function Market() {
     (item) => item.status !== "available"
   );
 
-  console.log(
-    "Statuses:",
-    sorted.map((s) => s.symbol + ":" + s.status)
-  );
-
-  console.log("First unavailable index:", firstUnavailableIndex);
-
   return (
     <div
       className={`min-h-screen px-4 pt-16 pb-32 ${

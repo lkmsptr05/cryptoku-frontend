@@ -25,7 +25,7 @@ export default function useOrderHistory({ initData }) {
       }
 
       const res = await fetch(
-        `${API_BASE_URL}/me/orders?${params.toString()}`,
+        `${API_BASE_URL}/orders/history?${params.toString()}`,
         {
           headers: {
             "x-telegram-init-data": initData,

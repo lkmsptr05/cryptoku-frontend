@@ -38,7 +38,6 @@ export function useBalanceHistory({ initData }) {
       }
 
       const data = await res.json();
-      console.log(data);
 
       if (isLoadMore) {
         setItems((prev) => [...prev, ...(data.items || [])]);
