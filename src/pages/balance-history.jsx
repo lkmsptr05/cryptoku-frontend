@@ -25,6 +25,52 @@ function formatDate(dateStr) {
   });
 }
 
+function safeParseMeta(meta) {
+  if (!meta) return null;
+
+  if (typeof meta === "object") return meta;
+
+  if (typeof meta === "string") {
+    try {
+      return JSON.parse(meta);
+    } catch (e) {
+      return { raw: meta };
+    }
+  }
+
+  return null;
+}
+
+const formatTokenPair = (meta) => {
+  if (meta?.token_pair) return meta.token_pair;
+
+  if (meta?.token_symbol) {
+    const sym = String(meta.token_symbol).toUpperCase();
+    if (sym.endsWith("USDT")) {
+      const base = sym.replace(/USDT$/i, "");
+      return `${base}/USDT`;
+    }
+    return sym;
+  }
+
+  return null;
+};
+
+const formatNetworkLabel = (meta) => {
+  if (meta?.network_label) return meta.network_label;
+
+  if (meta?.network_key) {
+    const key = String(meta.network_key).toLowerCase();
+    if (key === "bsc") return "BNB Chain";
+    if (key === "base") return "Base";
+    if (key === "op" || key === "optimism") return "Optimism";
+    if (key === "eth" || key === "ethereum") return "Ethereum";
+    return meta.network_key;
+  }
+
+  return null;
+};
+
 export default function BalanceHistoryPage() {
   const navigate = useNavigate();
   const { theme } = useTheme?.() || { theme: "dark" };
@@ -40,6 +86,111 @@ export default function BalanceHistoryPage() {
   // 🔹 pakai hook global
   const { items, loading, loadingMore, error, hasMore, loadMore } =
     useBalanceHistory({ initData });
+  const renderMetadataDetail = (h) => {
+    const meta = safeParseMeta(h?.metadata);
+    if (!meta || Object.keys(meta).length === 0) return null;
+
+    // 🔹 TOPUP
+    if (h.change_type === "topup") {
+      return (
+        <div className="mt-1.5 text-[11px] bg-zinc-950/80 rounded-lg p-2 border border-zinc-800 space-y-1.5">
+          {meta.message && (
+            <p className="text-zinc-100 font-medium">{meta.message}</p>
+          )}
+
+          <ul className="list-disc list-inside space-y-0.5 text-zinc-300">
+            {meta.method && <li>Metode: {meta.method}</li>}
+            {meta.status && <li>Status: {meta.status}</li>}
+            {h.related_topup_id && <li>ID Topup: #{h.related_topup_id}</li>}
+          </ul>
+        </div>
+      );
+    }
+
+    // 🔹 BUY LOCK
+    if (h.change_type === "buy_lock") {
+      const pair = formatTokenPair(meta);
+      const networkLabel = formatNetworkLabel(meta);
+
+      return (
+        <div className="mt-1.5 text-[11px] bg-zinc-950/80 rounded-lg p-2 border border-zinc-800 space-y-1.5">
+          <p className="text-zinc-100 font-medium">
+            Saldo berhasil dikunci untuk proses pembelian.
+          </p>
+          <ul className="list-disc list-inside space-y-0.5 text-zinc-300">
+            {pair && <li>Pair: {pair}</li>}
+            {networkLabel && <li>Jaringan: {networkLabel}</li>}
+            {meta.amount_idr && (
+              <li>
+                Nominal: Rp {Number(meta.amount_idr).toLocaleString("id-ID")}
+              </li>
+            )}
+            {h.related_order_id && <li>ID Order: #{h.related_order_id}</li>}
+          </ul>
+        </div>
+      );
+    }
+
+    // 🔹 BUY SUCCESS / FAILED
+    if (h.change_type === "buy_success" || h.change_type === "buy_failed") {
+      const pair = formatTokenPair(meta);
+      const networkLabel = formatNetworkLabel(meta);
+
+      return (
+        <div className="mt-1.5 text-[11px] bg-zinc-950/80 rounded-lg p-2 border border-zinc-800 space-y-1.5">
+          {meta.error ? (
+            <p className="text-red-300 font-medium">{meta.error}</p>
+          ) : (
+            <p className="text-zinc-100 font-medium">
+              Transaksi pembelian telah diproses.
+            </p>
+          )}
+
+          <ul className="list-disc list-inside space-y-0.5 text-zinc-300">
+            {pair && <li>Pair: {pair}</li>}
+            {networkLabel && <li>Jaringan: {networkLabel}</li>}
+            {meta.amount_idr && (
+              <li>
+                Nominal: Rp {Number(meta.amount_idr).toLocaleString("id-ID")}
+              </li>
+            )}
+            {meta.service_fee_idr && (
+              <li>
+                Biaya layanan: Rp{" "}
+                {Number(meta.service_fee_idr).toLocaleString("id-ID")}
+              </li>
+            )}
+            {meta.gas_fee_idr && (
+              <li>
+                Biaya jaringan: Rp{" "}
+                {Number(meta.gas_fee_idr).toLocaleString("id-ID")}
+              </li>
+            )}
+            {meta.tx_hash && (
+              <li className="break-all">Tx Hash: {meta.tx_hash}</li>
+            )}
+            {h.related_order_id && <li>ID Order: #{h.related_order_id}</li>}
+          </ul>
+        </div>
+      );
+    }
+
+    // 🔹 FALLBACK: key-value list, bukan JSON mentah
+    return (
+      <div className="mt-1.5 text-[11px] bg-zinc-950/80 rounded-lg p-2 border border-zinc-800 text-zinc-300">
+        <ul className="list-disc list-inside space-y-0.5">
+          {Object.entries(meta).map(([key, value]) => (
+            <li key={key}>
+              <span className="font-medium">{key}:</span>{" "}
+              <span>
+                {typeof value === "string" ? value : JSON.stringify(value)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -132,18 +283,6 @@ export default function BalanceHistoryPage() {
                         {h.note || style.label}
                       </p>
 
-                      <p className="mt-1 text-[11px] text-zinc-400">
-                        Available: Rp{" "}
-                        {Number(h.balance_available_after || 0).toLocaleString(
-                          "id-ID"
-                        )}
-                        {" · "}
-                        Locked: Rp{" "}
-                        {Number(h.balance_locked_after || 0).toLocaleString(
-                          "id-ID"
-                        )}
-                      </p>
-
                       <p className="mt-1 text-[10px] text-zinc-500">
                         {formatDate(h.created_at)}
                       </p>
@@ -162,11 +301,7 @@ export default function BalanceHistoryPage() {
                               : "Lihat detail transaksi"}
                           </button>
 
-                          {isExpanded && (
-                            <pre className="mt-1.5 text-[10px] bg-zinc-950/80 rounded-lg p-2 overflow-x-auto text-zinc-300 border border-zinc-800">
-                              {JSON.stringify(h.metadata, null, 2)}
-                            </pre>
-                          )}
+                          {isExpanded && renderMetadataDetail(h)}
                         </div>
                       )}
                     </div>

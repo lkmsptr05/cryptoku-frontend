@@ -69,6 +69,7 @@ export default function NotificationsPage() {
   const renderMetadataDetail = (notif) => {
     const meta = notif?.metadata || {};
 
+    // 🎁 Reward (sudah OK, tetap pakai versi lama)
     if (notif?.type === "reward") {
       return (
         <div className="text-[11px] text-emerald-300 bg-emerald-900/30 border border-emerald-700/50 rounded-lg px-2 py-1.5 space-y-0.5">
@@ -80,6 +81,7 @@ export default function NotificationsPage() {
       );
     }
 
+    // 🛠 System maintenance (sudah OK, tetap pakai versi lama)
     if (notif?.type === "system" && meta.category === "maintenance") {
       return (
         <div className="text-[11px] text-amber-200 bg-amber-900/30 border border-amber-700/50 rounded-lg px-2 py-1.5 space-y-0.5">
@@ -93,11 +95,57 @@ export default function NotificationsPage() {
       );
     }
 
+    // 💸 BUY (success / failed / pending) → tampilkan rapi ala email
+    if (
+      notif?.type === "buy_failed" ||
+      notif?.type === "buy_success" ||
+      notif?.type === "buy_pending"
+    ) {
+      const pair =
+        meta.pair ||
+        meta.token_pair ||
+        (typeof notif.body === "string"
+          ? (
+              notif.body.match(/pembelian\s+([a-z0-9/]+)/i)?.[1] || ""
+            ).toUpperCase()
+          : "");
+
+      const networkLabel =
+        meta.network_label || meta.network || meta.network_key || null;
+
+      return (
+        <div className="text-[11px] bg-zinc-900/70 border border-zinc-700/70 rounded-lg px-3 py-2 space-y-1.5">
+          {/* body-nya sudah friendly dari backend: */}
+          {meta.error && (
+            <p className="text-zinc-100 font-medium leading-snug">
+              {meta.error}
+            </p>
+          )}
+
+          <ul className="list-disc list-inside space-y-0.5 text-[11px] text-zinc-300">
+            {pair && <li>Pair: {pair}</li>}
+            {networkLabel && <li>Jaringan: {networkLabel}</li>}
+            {meta.order_id && <li>ID Order: #{meta.order_id}</li>}
+          </ul>
+        </div>
+      );
+    }
+
+    // 🌐 Fallback umum: meta lain jadi key-value list, bukan JSON mentah
     if (Object.keys(meta).length > 0) {
       return (
-        <pre className="text-[11px] bg-zinc-900 rounded-lg p-2 overflow-x-auto text-zinc-200 border border-zinc-800">
-          {JSON.stringify(meta, null, 2)}
-        </pre>
+        <div className="text-[11px] bg-zinc-900/70 border border-zinc-800 rounded-lg px-3 py-2 space-y-0.5 text-zinc-200">
+          <ul className="list-disc list-inside space-y-0.5">
+            {Object.entries(meta).map(([key, value]) => (
+              <li key={key}>
+                <span className="font-medium">{key}:</span>{" "}
+                <span>
+                  {typeof value === "string" ? value : JSON.stringify(value)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       );
     }
 

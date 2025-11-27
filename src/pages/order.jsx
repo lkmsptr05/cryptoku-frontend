@@ -13,6 +13,7 @@ import { API_BASE_URL } from "../config/api";
 import { useAllPrices } from "../hooks/usePrices";
 import useTelegramAuth from "../hooks/useTelegramAuth";
 import useMyBalance from "../hooks/useMyBalance";
+import toast from "react-hot-toast";
 
 const SERVICE_FEE_PERCENT = 4; // sudah termasuk Midtrans
 const MIN_PURCHASE_IDR = 1000; // minimal pembelian tetap (Rp)
@@ -430,13 +431,24 @@ export default function Order() {
   const handleConfirmBuy = async () => {
     if (!canSubmitBuy || isSubmitting) return;
 
+    setShowPreview(false);
     setSubmitError("");
     setIsSubmitting(true);
+
+    // 🚀 FEEDBACK INSTAN
+    toast("Mengirim permintaan order…", {
+      style: {
+        background: "#111",
+        color: "#fff",
+        border: "1px solid #27272a",
+      },
+    });
 
     try {
       const tokenSymbol = token
         ? token.symbol
         : selectedBackendToken.price_symbol;
+
       if (!tokenSymbol) {
         throw new Error("Symbol token tidak ditemukan di konfigurasi.");
       }
@@ -449,15 +461,28 @@ export default function Order() {
       );
 
       setLastOrder(order);
-      setShowPreview(false);
 
-      const tgWebApp = window.Telegram?.WebApp;
-      if (tgWebApp?.showAlert) {
-        tgWebApp.showAlert("Order pembelian sedang diproses ✅");
-      }
+      // ✅ UPGRADE toast-nya
+      toast("Order pembelian sedang diproses…", {
+        style: {
+          background: "#111",
+          color: "#fff",
+          border: "1px solid #27272a",
+        },
+      });
     } catch (err) {
       console.error("CONFIRM BUY FAILED:", err);
-      setSubmitError(err.message || "Gagal mengirim order beli");
+
+      const msg = err.message || "Gagal mengirim order beli";
+      setSubmitError(msg);
+
+      toast(msg, {
+        style: {
+          background: "#7f1d1d",
+          color: "#fff",
+          border: "1px solid #b91c1c",
+        },
+      });
     } finally {
       setIsSubmitting(false);
     }
