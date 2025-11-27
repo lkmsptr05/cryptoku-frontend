@@ -15,6 +15,7 @@ import useSystemHealth from "../hooks/useSystemHealth";
 import useTopGainers from "../hooks/useTopGainers";
 import useCryptoNews from "../hooks/useCryptoNews";
 import useMarketIndex from "../hooks/useMarketIndex";
+import TopupSnapModal from "../components/TopupSnapModal";
 
 const formatIDR = (n) => {
   const num = Number(n);
@@ -30,6 +31,7 @@ const formatIDR = (n) => {
 export default function Home({ telegramUser, initData }) {
   const topup = useTopup();
   const navigate = useNavigate();
+  const [openTopup, setOpenTopup] = useState(false);
 
   const { amoled, toggleTheme } = useTheme();
   const { unreadCount } = useNotificationsBadge();
@@ -301,9 +303,19 @@ export default function Home({ telegramUser, initData }) {
 
             {/* tombol */}
             <div className="flex items-center gap-2 mt-2">
+              {/* <button
+                onClick={() => setOpenTopup(true)}
+                className="
+      flex-1 py-2 rounded-2xl text-xs font-semibold
+      bg-emerald-500 text-black
+      hover:bg-emerald-400 transition
+    "
+              >
+                Top Up
+              </button> */}
               <button
                 type="button"
-                onClick={topup.open}
+                onClick={() => setOpenTopup(true)}
                 className="flex-1 py-2 rounded-2xl text-xs font-semibold 
                   bg-emerald-500 text-black
                   hover:bg-emerald-400
@@ -312,7 +324,11 @@ export default function Home({ telegramUser, initData }) {
               >
                 Top Up Saldo
               </button>
-              <TopUpModal topup={topup} />
+              {/* <TopUpModal topup={topup} /> */}
+              <TopupSnapModal
+                open={openTopup}
+                onClose={() => setOpenTopup(false)}
+              />
               <button
                 type="button"
                 onClick={() => navigate("/balance/history")}

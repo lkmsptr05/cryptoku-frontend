@@ -8,7 +8,6 @@ export function useBalanceHistory({ initData }) {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
-  console.log(items);
   const fetchHistory = async (isLoadMore = false) => {
     if (!initData) return;
     if (isLoadMore && !nextCursor) return;

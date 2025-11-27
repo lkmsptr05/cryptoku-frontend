@@ -9,7 +9,6 @@ import {
 // Pakai default export biar enak di-import: import useNotifications from ...
 export default function useNotifications() {
   const [items, setItems] = useState([]);
-  console.log(items);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const fetchNotifications = async () => {

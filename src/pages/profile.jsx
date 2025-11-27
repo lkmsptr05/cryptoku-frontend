@@ -6,6 +6,7 @@ import { getMe } from "../services/api";
 import { useNavigate } from "react-router-dom";
 import useNotificationsBadge from "../hooks/useNotificationsBadge";
 import useMe from "../hooks/useMe";
+import TopupSnapModal from "../components/TopupSnapModal";
 
 export default function Profile() {
   const { amoled, toggleTheme } = useTheme();
@@ -13,7 +14,7 @@ export default function Profile() {
   const { unreadCount } = useNotificationsBadge();
   const [showHeader, setShowHeader] = useState(true);
   const lastScrollY = useRef(0);
-
+  const [openTopup, setOpenTopup] = useState(false);
   // Scroll behavior (optional, bisa sama kayak Home)
   useEffect(() => {
     function onScroll() {
@@ -341,10 +342,14 @@ export default function Profile() {
                   <button
                     type="button"
                     className="text-[11px] px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-300"
-                    // onClick={() => ... buka topup }
+                    onClick={() => setOpenTopup(true)}
                   >
                     Top Up
                   </button>
+                  <TopupSnapModal
+                    open={openTopup}
+                    onClose={() => setOpenTopup(false)}
+                  />
                   <button
                     type="button"
                     className="text-[11px] px-3 py-1.5 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-200"

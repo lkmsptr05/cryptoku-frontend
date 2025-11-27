@@ -105,7 +105,6 @@ export default function App() {
         });
 
         const json = await res.json();
-        console.log(initData);
         if (!res.ok || !json?.success) {
           console.error("[Auth] Backend auth failed:", json);
           setAuthError("Gagal autentikasi dengan Telegram.");
