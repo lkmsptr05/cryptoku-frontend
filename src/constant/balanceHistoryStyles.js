@@ -6,6 +6,7 @@ import {
   XCircle,
   ArrowUpRight,
   SlidersHorizontal,
+  GiftIcon,
 } from "lucide-react";
 
 export const BALANCE_CHANGE_STYLES = {
