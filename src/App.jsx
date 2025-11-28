@@ -144,7 +144,7 @@ export default function App() {
     // Kalau sudah tidak loading → delay sebelum splash OFF
     const timer = setTimeout(() => {
       setShowSplash(false);
-    }, 600); // 600ms; bisa diubah sesuai selera
+    }, 1500); // 600ms; bisa diubah sesuai selera
 
     return () => clearTimeout(timer);
   }, [isStillLoading]);
@@ -163,25 +163,16 @@ export default function App() {
   if (!authedUser) {
     return (
       <ThemeProvider>
-        <PendingTopupProvider>
-          <Toaster
-            position="top-center"
-            toastOptions={{
-              style: {
-                background: "#111",
-                color: "#fff",
-                border: "1px solid #27272a",
-              },
-            }}
-          />
-
-          <BrowserRouter>
-            <RouterWrapper
-              telegramUser={authedUser || user}
-              initData={initData}
-            />
-          </BrowserRouter>
-        </PendingTopupProvider>
+        <div className="min-h-screen bg-black flex items-center justify-center text-center px-6">
+          <div>
+            <h1 className="text-white text-xl font-semibold mb-2">
+              CryptoKu hanya dapat dibuka dari Telegram
+            </h1>
+            <p className="text-gray-400 text-sm">
+              Silakan buka aplikasi ini melalui bot resmi CryptoKu di Telegram.
+            </p>
+          </div>
+        </div>
       </ThemeProvider>
     );
   }

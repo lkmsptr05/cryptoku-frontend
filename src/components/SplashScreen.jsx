@@ -10,7 +10,7 @@ export function SplashScreen({ isFadingOut = false }) {
       }
     >
       <img
-        src="/assets/logo/cryptoku.svg"
+        src="/assets/logo/cryptoku.png"
         alt="CryptoKu"
         className="w-56 h-56 mb-6 animate-pulse"
       />
