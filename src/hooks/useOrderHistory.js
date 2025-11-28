@@ -24,14 +24,11 @@ export default function useOrderHistory({ initData }) {
         params.set("before", nextCursor);
       }
 
-      const res = await fetch(
-        `${API_BASE_URL}/orders/history?${params.toString()}`,
-        {
-          headers: {
-            "x-telegram-init-data": initData,
-          },
-        }
-      );
+      const res = await fetch(`${API_BASE_URL}/topup/history`, {
+        headers: {
+          "x-telegram-init-data": initData,
+        },
+      });
 
       if (!res.ok) {
         throw new Error(`Error ${res.status}`);

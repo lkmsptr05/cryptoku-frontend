@@ -6,8 +6,14 @@ import { NavLink } from "react-router-dom";
 import { Home, User, History, BarChart3 } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 
+// ✅ NEW
+import { usePendingTopup } from "../contexts/pendingTopupContext.jsx";
+
 export default function BottomNav() {
   const { amoled } = useTheme();
+
+  // ✅ Ambil pendingCount dari context
+  const { pendingCount } = usePendingTopup();
 
   return (
     <nav
@@ -50,7 +56,13 @@ export default function BottomNav() {
             <BarChart3 size={20} />
           </TabItem>
 
-          <TabItem to="/activity" label="Activity" amoled={amoled}>
+          {/* ✅ BADGE DI ACTIVITY */}
+          <TabItem
+            to="/activity"
+            label="Activity"
+            amoled={amoled}
+            badgeCount={pendingCount}
+          >
             <History size={20} />
           </TabItem>
 
@@ -63,7 +75,7 @@ export default function BottomNav() {
   );
 }
 
-function TabItem({ to, label, children, amoled }) {
+function TabItem({ to, label, children, amoled, badgeCount = 0 }) {
   return (
     <NavLink
       to={to}
@@ -85,6 +97,7 @@ function TabItem({ to, label, children, amoled }) {
         <>
           <div
             className={`
+              relative
               mb-[2px]
               inline-flex items-center justify-center
               h-8 w-8 rounded-full
@@ -97,7 +110,27 @@ function TabItem({ to, label, children, amoled }) {
             }}
           >
             {children}
+
+            {/* ✅ Badge kecil pojok kanan atas icon */}
+            {badgeCount > 0 && (
+              <span
+                className="
+                  absolute -top-1 -right-1
+                  min-w-[16px] h-[16px]
+                  px-1
+                  flex items-center justify-center
+                  text-[9px] font-bold
+                  rounded-full
+                  bg-amber-500 text-black
+                  border border-black
+                  shadow-md
+                "
+              >
+                {badgeCount > 9 ? "9+" : badgeCount}
+              </span>
+            )}
           </div>
+
           <span className="leading-none">{label}</span>
         </>
       )}

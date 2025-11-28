@@ -10,6 +10,9 @@ import useTelegramAuth from "../hooks/useTelegramAuth";
 import { useBalanceHistory } from "../hooks/useBalanceHistory";
 import useOrderHistory from "../hooks/useOrderHistory";
 
+// ⬇️ NEW: import pending topup context
+import { usePendingTopup } from "../contexts/pendingTopupContext.jsx";
+
 // helper format
 const formatRupiah = (n) => {
   const num = Number(n);
@@ -73,6 +76,19 @@ export default function Activity() {
 
   // tab aktivtas
   const [activeTab, setActiveTab] = useState("balance"); // "balance" | "orders"
+  const isBalanceTab = activeTab === "balance";
+
+  // ⬇️ NEW: pending topup context (badge + info tab aktif)
+  const { pendingCount, setIsTopupTabActive } = usePendingTopup();
+
+  // tandai ke watcher global kalau lagi di tab "Riwayat Topup"
+  useEffect(() => {
+    setIsTopupTabActive(activeTab === "orders");
+    return () => {
+      // kalau halaman Activity unmount, jangan dianggap masih di tab topup
+      setIsTopupTabActive(false);
+    };
+  }, [activeTab, setIsTopupTabActive]);
 
   // floating header seperti page lain
   const [showHeader, setShowHeader] = useState(true);
@@ -129,8 +145,6 @@ export default function Activity() {
   const cardBaseClass = amoled
     ? "bg-black/50 border-zinc-800"
     : "bg-zinc-900/80 border-zinc-800";
-
-  const isBalanceTab = activeTab === "balance";
 
   return (
     <div
@@ -191,14 +205,19 @@ export default function Activity() {
           <button
             type="button"
             onClick={() => setActiveTab("orders")}
-            className={`flex-1 text-center text-xs font-medium rounded-xl py-2 transition
+            className={`flex-1 text-center text-xs font-medium rounded-xl py-2 transition flex items-center justify-center gap-1
               ${
                 !isBalanceTab
                   ? "bg-sky-500 text-black shadow border border-sky-400/70"
                   : "bg-transparent text-zinc-400 border border-transparent"
               }`}
           >
-            Riwayat Order
+            <span>Riwayat Topup</span>
+            {pendingCount > 0 && (
+              <span className="min-w-[16px] px-1 text-[9px] bg-amber-500 text-black rounded-full text-center font-semibold">
+                {pendingCount > 9 ? "9+" : pendingCount}
+              </span>
+            )}
           </button>
         </section>
 
@@ -208,14 +227,15 @@ export default function Activity() {
           <div className="flex items-center justify-between mb-1.5">
             <div className="flex flex-col">
               <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-                {isBalanceTab ? "Perubahan saldo" : "Transaksi pembelian"}
+                {isBalanceTab ? "Mutasi saldo IDR" : "Riwayat top up"}
               </p>
+
               <p className="text-xs text-zinc-400">
                 {authLoading
                   ? "Menyiapkan data Telegram..."
                   : isBalanceTab
-                  ? "Top up, pembelian, dan penyesuaian lainnya."
-                  : "Riwayat order buy aset dari saldo IDR kamu."}
+                  ? "Perubahan saldo dari top up, pembelian, dan penyesuaian."
+                  : "Riwayat pengisian saldo Cryptoku melalui midtrans."}
               </p>
             </div>
           </div>
@@ -295,17 +315,6 @@ export default function Activity() {
                             {formatRupiah(Math.abs(amount))}
                           </span>
                         </div>
-
-                        {/* <p className="text-[11px] text-zinc-500 mt-0.5">
-                          sisa:{" "}
-                          <span className="text-zinc-200">
-                            {formatRupiah(
-                              item.balance_available_after ??
-                                item.balance_available ??
-                                0
-                            )}
-                          </span>
-                        </p> */}
                       </div>
                     </div>
                   );
@@ -334,7 +343,7 @@ export default function Activity() {
               </>
             ) : (
               <>
-                {/* ORDERS TAB */}
+                {/* ORDERS / TOPUP HISTORY TAB */}
 
                 {orderLoading && (
                   <>
@@ -354,72 +363,123 @@ export default function Activity() {
                   !orderError &&
                   (!orderItems || orderItems.length === 0) && (
                     <p className="text-[11px] text-zinc-500 py-3">
-                      Belum ada riwayat order.
+                      Belum ada riwayat top up.
                     </p>
                   )}
 
-                {orderItems.map((order) => {
-                  const status = (order.status || "").toLowerCase();
-                  const isPending = status === "pending";
-                  const isSuccess =
-                    status === "success" || status === "settled";
-                  const isFailed =
-                    status === "failed" ||
-                    status === "canceled" ||
-                    status === "cancelled";
+                {!orderLoading &&
+                  !orderError &&
+                  orderItems &&
+                  orderItems.length > 0 && (
+                    <div className="divide-y divide-zinc-800/80">
+                      {orderItems.map((order) => {
+                        const status = (order.status || "").toLowerCase();
+                        const isPending = status === "pending";
+                        const isSuccess = status === "success";
+                        const isFailed = status === "failed";
 
-                  let statusLabel = "Pending";
-                  let statusClass =
-                    "text-amber-300 border-amber-500/40 bg-amber-500/10";
+                        // status badge
+                        let statusLabel = "Menunggu";
+                        let statusClass =
+                          "text-amber-300 border-amber-500/40 bg-amber-500/10";
 
-                  if (isSuccess) {
-                    statusLabel = "Berhasil";
-                    statusClass =
-                      "text-emerald-300 border-emerald-500/40 bg-emerald-500/10";
-                  } else if (isFailed) {
-                    statusLabel = "Gagal";
-                    statusClass =
-                      "text-red-300 border-red-500/40 bg-red-500/10";
-                  }
+                        if (isSuccess) {
+                          statusLabel = "Berhasil";
+                          statusClass =
+                            "text-emerald-300 border-emerald-500/40 bg-emerald-500/10";
+                        } else if (isFailed) {
+                          statusLabel = "Gagal";
+                          statusClass =
+                            "text-red-300 border-red-500/40 bg-red-500/10";
+                        }
 
-                  const tokenSymbol =
-                    order.token_symbol || order.symbol || "TOKEN";
-                  const amountIdr =
-                    order.amount_idr ||
-                    order.amount_idr_locked ||
-                    order.amount_idr_total ||
-                    0;
+                        // payment method label
+                        const paymentType = (
+                          order.payment_type || ""
+                        ).toLowerCase();
+                        let paymentLabel = "Metode tidak dikenal";
 
-                  return (
-                    <div
-                      key={order.id}
-                      className="flex items-center justify-between gap-3 py-3"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <TypeBadge label="Order" color="order" />
-                          <span className="text-xs text-zinc-300 truncate">
-                            Beli {tokenSymbol.toUpperCase()}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-zinc-500 mt-0.5">
-                          {formatDateTime(order.created_at)}
-                        </p>
-                      </div>
+                        if (paymentType.includes("qris")) {
+                          paymentLabel = "QRIS";
+                        } else if (paymentType.includes("gopay")) {
+                          paymentLabel = "GoPay";
+                        } else if (paymentType.includes("shopee")) {
+                          paymentLabel = "ShopeePay";
+                        } else if (paymentType.includes("va")) {
+                          paymentLabel = "Virtual Account";
+                        }
 
-                      <div className="flex flex-col items-end text-right gap-1">
-                        <span className="text-xs font-semibold text-zinc-100">
-                          {formatRupiah(amountIdr)}
-                        </span>
-                        <span
-                          className={`inline-flex items-center px-2 py-[2px] rounded-full text-[10px] border ${statusClass}`}
-                        >
-                          {statusLabel}
-                        </span>
-                      </div>
+                        const amountIdr = Number(order.amount || 0);
+
+                        // order id pendek untuk tampilan
+                        const shortOrderId = order.order_id
+                          ? `#${order.order_id.slice(-8)}`
+                          : "-";
+
+                        const canResume = isPending && !!order.snap_token;
+
+                        return (
+                          <div
+                            key={order.id}
+                            className="flex items-center justify-between gap-3 py-3"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <TypeBadge label="Top Up" color="order" />
+                                <span className="text-xs text-zinc-100 truncate">
+                                  Top up saldo CryptoKu
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2 mt-0.5 text-[10px] text-zinc-500">
+                                <span className="truncate">{shortOrderId}</span>
+                                <span className="w-[3px] h-[3px] rounded-full bg-zinc-600" />
+                                <span className="inline-flex items-center px-2 py-[1px] rounded-full border border-zinc-700 bg-zinc-900/60 text-[10px] text-zinc-300">
+                                  {paymentLabel}
+                                </span>
+                              </div>
+
+                              <p className="text-[10px] text-zinc-500 mt-0.5">
+                                {formatDateTime(order.created_at)}
+                              </p>
+                            </div>
+
+                            <div className="flex flex-col items-end text-right gap-1">
+                              <span className="text-xs font-semibold text-zinc-50">
+                                {formatRupiah(amountIdr)}
+                              </span>
+
+                              <span
+                                className={`inline-flex items-center px-2 py-[2px] rounded-full text-[10px] border ${statusClass}`}
+                              >
+                                <span className="w-[6px] h-[6px] rounded-full bg-current mr-1 opacity-80" />
+                                {statusLabel}
+                              </span>
+
+                              {canResume && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    window.snap?.pay(order.snap_token, {
+                                      onSuccess: () => {
+                                        // optional: trigger refetch orders setelah beberapa detik
+                                      },
+                                      onPending: () => {},
+                                      onError: () => {},
+                                      onClose: () => {},
+                                    })
+                                  }
+                                  className="mt-0.5 px-2 py-[3px] rounded-lg bg-amber-500/10 text-[10px] text-amber-300 border border-amber-500/30 hover:bg-amber-500/20 active:scale-[0.97] transition"
+                                >
+                                  Lanjutkan pembayaran
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
+                  )}
 
                 {orderHasMore && !orderLoading && (
                   <div className="pt-3">
@@ -435,7 +495,7 @@ export default function Activity() {
                       <span>
                         {orderLoadingMore
                           ? "Memuat lagi..."
-                          : "Muat riwayat order lainnya"}
+                          : "Muat riwayat top up lainnya"}
                       </span>
                     </button>
                   </div>

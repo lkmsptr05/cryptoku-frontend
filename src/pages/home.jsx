@@ -8,7 +8,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import GlobalHeader from "../components/GlobalHeader";
 import useNotificationsBadge from "../hooks/useNotificationsBadge";
 import useTopup from "../hooks/useTopup";
-import TopUpModal from "../components/TopupModal";
+// import TopUpModal from "../components/TopupModal";
 import { useNavigate } from "react-router-dom";
 import useMyBalance from "../hooks/useMyBalance";
 import useSystemHealth from "../hooks/useSystemHealth";

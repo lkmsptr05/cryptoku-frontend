@@ -14,8 +14,10 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import useTelegramAuth from "./hooks/useTelegramAuth";
 import { API_BASE_URL } from "./config/api";
 import { Toaster } from "react-hot-toast";
+import { PendingTopupProvider } from "./contexts/pendingTopupContext.jsx";
+import { PendingTopupWatcher } from "./components/PendingTopupWatcher.jsx";
+import { SplashScreen } from "./components/SplashScreen.jsx";
 
-/* -------------------- Page Transition (simple fade) -------------------- */
 function PageTransition({ children }) {
   return (
     <div
@@ -79,6 +81,10 @@ export default function App() {
   const [authError, setAuthError] = useState(null);
   const [authedUser, setAuthedUser] = useState(null);
 
+  // Kontrol tampilan splash (termasuk delay setelah loading selesai)
+  const [showSplash, setShowSplash] = useState(true);
+
+  // Auth ke backend pakai initData Telegram
   useEffect(() => {
     // masih nunggu hook Telegram
     if (loading) return;
@@ -127,44 +133,55 @@ export default function App() {
 
   const isStillLoading = loading || authLoading;
 
-  if (isStillLoading) {
-    // layar loading global saat pertama kali buka App
+  // Logic delay + fade-out splash
+  useEffect(() => {
+    // Kalau masih loading → splash ON
+    if (isStillLoading) {
+      setShowSplash(true);
+      return;
+    }
+
+    // Kalau sudah tidak loading → delay sebelum splash OFF
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 600); // 600ms; bisa diubah sesuai selera
+
+    return () => clearTimeout(timer);
+  }, [isStillLoading]);
+
+  // Selama showSplash true → tampilin SplashScreen saja
+  // isFadingOut = true kalau loading sudah selesai tapi splash masih ditahan (delay)
+  if (showSplash) {
     return (
       <ThemeProvider>
-        <div className="min-h-screen flex flex-col items-center justify-center bg-black text-white">
-          <div className="w-8 h-8 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin mb-3" />
-          <p className="text-xs text-zinc-400">Menghubungkan ke Telegram...</p>
-        </div>
+        <SplashScreen isFadingOut={!isStillLoading} />
       </ThemeProvider>
     );
   }
 
-  // STRICT MODE: hanya boleh buka dari Telegram
+  // STRICT MODE: hanya boleh buka dari Telegram (tapi kamu masih render app dev di bawah ini)
   if (!authedUser) {
     return (
       <ThemeProvider>
-        <div className="min-h-screen flex items-center justify-center bg-black text-white px-4 text-center">
-          <div className="max-w-sm w-full space-y-4">
-            <h1 className="text-xl font-semibold text-red-400">
-              Akses Ditolak
-            </h1>
+        <PendingTopupProvider>
+          <Toaster
+            position="top-center"
+            toastOptions={{
+              style: {
+                background: "#111",
+                color: "#fff",
+                border: "1px solid #27272a",
+              },
+            }}
+          />
 
-            <p className="text-sm text-gray-400">
-              CryptoKu hanya bisa dibuka melalui aplikasi Telegram.
-            </p>
-
-            <p className="text-xs text-gray-500">
-              Buka bot resmi kami lalu tekan tombol <b>Open App</b>
-            </p>
-
-            <a
-              href="https://t.me/GoCryptoku_bot"
-              className="inline-block w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg"
-            >
-              Buka di Telegram
-            </a>
-          </div>
-        </div>
+          <BrowserRouter>
+            <RouterWrapper
+              telegramUser={authedUser || user}
+              initData={initData}
+            />
+          </BrowserRouter>
+        </PendingTopupProvider>
       </ThemeProvider>
     );
   }
@@ -172,9 +189,27 @@ export default function App() {
   // App normal
   return (
     <ThemeProvider>
-      <BrowserRouter>
-        <RouterWrapper telegramUser={authedUser || user} initData={initData} />
-      </BrowserRouter>
+      <PendingTopupProvider>
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            style: {
+              background: "#111",
+              color: "#fff",
+              border: "1px solid #27272a",
+            },
+          }}
+        />
+
+        <PendingTopupWatcher />
+
+        <BrowserRouter>
+          <RouterWrapper
+            telegramUser={authedUser || user}
+            initData={initData}
+          />
+        </BrowserRouter>
+      </PendingTopupProvider>
     </ThemeProvider>
   );
 }
