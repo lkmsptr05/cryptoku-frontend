@@ -14,7 +14,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import useTelegramAuth from "./hooks/useTelegramAuth";
 import { API_BASE_URL } from "./config/api";
 import { Toaster } from "react-hot-toast";
-import { PendingTopupProvider } from "./contexts/pendingTopupContext.jsx";
+import { PendingTopupProvider } from "./contexts/PendingTopupContext.jsx";
 import { PendingTopupWatcher } from "./components/PendingTopupWatcher.jsx";
 import { SplashScreen } from "./components/SplashScreen.jsx";
 
