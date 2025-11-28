@@ -11,7 +11,7 @@ import { useBalanceHistory } from "../hooks/useBalanceHistory";
 import useOrderHistory from "../hooks/useOrderHistory";
 
 // ⬇️ NEW: import pending topup context
-import { usePendingTopup } from "../contexts/pendingTopupContext.jsx";
+import { usePendingTopup } from "../contexts/PendingTopupContext.jsx";
 
 // helper format
 const formatRupiah = (n) => {

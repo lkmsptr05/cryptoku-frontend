@@ -7,7 +7,7 @@ import { Home, User, History, BarChart3 } from "lucide-react";
 import { useTheme } from "../contexts/ThemeContext";
 
 // ✅ NEW
-import { usePendingTopup } from "../contexts/pendingTopupContext.jsx";
+import { usePendingTopup } from "../contexts/PendingTopupContext.jsx";
 
 export default function BottomNav() {
   const { amoled } = useTheme();
