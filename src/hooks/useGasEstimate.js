@@ -33,6 +33,7 @@ export function useGasEstimate({
         const params = new URLSearchParams({
           network_key: networkKey,
           to,
+          tokenAddress,
         });
 
         if (tokenAddress) {
