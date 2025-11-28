@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import toast from "react-hot-toast";
 import { authedGet } from "../services/request";
-import { usePendingTopup } from "../contexts/pendingTopupContext.jsx";
+import { usePendingTopup } from "../contexts/PendingTopupContext.jsx";
 
 // Haptic helper
 function triggerHaptic(type = "warning") {
