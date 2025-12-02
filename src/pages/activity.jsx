@@ -185,7 +185,7 @@ export default function Activity() {
       {/* ===========================
           PAGE CONTENT
       ============================ */}
-      <div className="max-w-md mx-auto space-y-4 mt-4">
+      <div className="max-w-md mx-auto space-y-4 mt-6">
         {/* Tabs */}
         <section
           className={`rounded-2xl border px-2 py-2 flex gap-1 ${cardBaseClass}`}

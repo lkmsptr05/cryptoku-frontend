@@ -11,7 +11,6 @@ import { useNavigate } from "react-router-dom";
 import BannerBox from "../components/BannerBox";
 import useNotificationsBadge from "../hooks/useNotificationsBadge";
 import useMarketPrices from "../hooks/useMarketPrices";
-import useEthMovement from "../hooks/useEthMovement";
 import useMarketSupportedTokens from "../hooks/useMarketSupportedTokens";
 import MarketRowSkeleton from "../components/skeleton/MarketRowSkeleton";
 
@@ -214,10 +213,6 @@ export default function Market() {
     tokensError,
   } = useMarketSupportedTokens();
 
-  const { movement: ethMovement, loading: ethLoading } = useEthMovement();
-  const titleText = ethLoading
-    ? "ETH bergerak..."
-    : `ETH bergerak ${ethMovement} hari ini`;
   // Floating header state (match Home)
   const [showHeader, setShowHeader] = useState(true);
   const lastScrollY = useRef(0);
@@ -377,12 +372,12 @@ export default function Market() {
       {/* ===========================
           PAGE CONTENT
       ============================ */}
-      <div className="max-w-md pt-2 mx-auto">
+      <div className="max-w-md mt-6 mx-auto">
         <BannerBox
-          label="Market Update"
+          label="Harga Pasar Crypto"
           // Gunakan nilai dari state yang sudah diselesaikan
-          title={titleText}
-          description="Pantau market dan ambil peluang trading terbaik."
+          title="Pantau harga koin favoritmu"
+          description="Silahkan pilih koin."
           accent="emerald"
         />
 

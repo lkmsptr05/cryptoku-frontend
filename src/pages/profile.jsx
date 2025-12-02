@@ -118,7 +118,7 @@ export default function Profile() {
         </div>
       </div>
 
-      <main className="mt-3 space-y-4">
+      <main className="space-y-4 mt-6">
         <BannerBox
           label="Profile pengguna"
           title={user ? `Halo, ${displayName}` : "Memuat profil..."}

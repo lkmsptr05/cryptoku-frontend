@@ -351,7 +351,9 @@ export default function Home({ telegramUser, initData }) {
           <button
             onClick={() => setShowPopup(true)}
             className={`group rounded-2xl border border-zinc-800 p-4 shadow-md text-left transition transform hover:-translate-y-[1px] hover:border-zinc-700 ${
-              amoled ? "bg-black/40" : "bg-zinc-900/80"
+              amoled
+                ? "bg-black/40"
+                : "bg-gradient-to-br from-zinc-900/90 via-zinc-900/70 to-emerald-900/40 border-zinc-800/80"
             }`}
           >
             <div className="text-xs text-zinc-400 mb-1 flex items-center justify-between">

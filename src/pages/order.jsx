@@ -1,6 +1,4 @@
-// ===============================
 // src/pages/Order.jsx
-// ===============================
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowUp, ArrowDown, ArrowLeft } from "lucide-react";
@@ -15,19 +13,17 @@ import useTelegramAuth from "../hooks/useTelegramAuth";
 import useMyBalance from "../hooks/useMyBalance";
 import toast from "react-hot-toast";
 
+// NEW imports (replaced inline validators & local useGasEstimate)
+import useGasEstimate from "../hooks/useGasEstimate";
+import { isValidAddressForNetwork } from "../utils/validators";
+import { mapNetworkKeyForGas, prettyNetworkName } from "../utils/helpers";
+
 const SERVICE_FEE_PERCENT = 4; // sudah termasuk Midtrans
 const MIN_PURCHASE_IDR = 1000; // minimal pembelian tetap (Rp)
 
 // helper format pair
 const formatPair = (symbol) =>
   symbol?.toUpperCase().replace(/(USDT|USDC|USD)$/, "/$1") || "-";
-
-// normalisasi network key untuk endpoint gas
-const mapNetworkKeyForGas = (key = "") => {
-  const k = key.toLowerCase();
-  if (k === "eth") return "ethereum"; // backend maunya 'ethereum'
-  return key;
-};
 
 const formatUsdPrice = (price) => {
   const n = Number(price);
@@ -44,20 +40,6 @@ const formatUsdPrice = (price) => {
 const baseSymbolFromPair = (symbol) =>
   symbol ? symbol.toUpperCase().replace(/(USDT|USDC|BUSD|USD)$/, "") : "";
 
-// helper nama network
-const prettyNetworkName = (key) => {
-  if (!key) return "-";
-  const k = key.toLowerCase();
-  if (k === "eth" || k === "ethereum") return "Ethereum";
-  if (k === "bsc") return "BNB Chain";
-  if (k === "arbitrum") return "Arbitrum";
-  if (k === "optimism") return "Optimism";
-  if (k === "polygon") return "Polygon";
-  if (k === "base") return "Base";
-  return key.toUpperCase();
-};
-
-// format jumlah token untuk display di input & button
 const formatTokenAmount = (v) => {
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return "";
@@ -65,67 +47,15 @@ const formatTokenAmount = (v) => {
   return n.toFixed(6);
 };
 
-// validasi address EVM sederhana
-const isValidEvmAddress = (addr) => {
-  if (!addr) return false;
-  const v = addr.trim();
-  return /^0x[0-9a-fA-F]{40}$/.test(v);
-};
+// map network key for backend RPC/gas endpoint
+// (moved to helpers and imported)
+// const mapNetworkKeyForGas = (key = "") => { ... }
 
-/* ====================== HOOK: useGasEstimate ====================== */
-function useGasEstimate({ networkKey, to, tokenAddress, enabled = true }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState(null);
+// validasi address sekarang di utils/validators.js
+// const isValidEvmAddress = ...
+// const isValidTonAddress = ...
 
-  useEffect(() => {
-    if (!enabled || !networkKey || !to) return;
-
-    let intervalId;
-
-    const fetchGas = async () => {
-      try {
-        setLoading(true);
-        setErrorMsg(null);
-
-        const params = new URLSearchParams({
-          network_key: networkKey,
-          to,
-        });
-
-        if (tokenAddress) {
-          params.append("tokenAddress", tokenAddress);
-        }
-
-        const res = await fetch(
-          `${API_BASE_URL}/estimate-gas?${params.toString()}`
-        );
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-
-        const json = await res.json();
-        setData(json);
-      } catch (err) {
-        console.error("Failed to fetch gas estimate:", err);
-        setErrorMsg(err.message || "Failed to fetch gas estimate");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    // fetch pertama
-    fetchGas();
-    // polling tiap 10 detik
-    intervalId = window.setInterval(fetchGas, 10000);
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [networkKey, to, tokenAddress, enabled]);
-
-  return { data, loading, errorMsg };
-}
+/* ====================== HOOK: useGasEstimate is moved to ../hooks/useGasEstimate.js ====================== */
 
 const formatUsdFee = (usd) => {
   const n = parseFloat(usd);
@@ -153,10 +83,8 @@ export default function Order() {
   const navigate = useNavigate();
   const { unreadCount } = useNotificationsBadge();
 
-  // harga global dari hook (buat pair dropdown & fallback token)
   const { prices: allPrices } = useAllPrices();
 
-  // auth + saldo
   const { user } = useTelegramAuth();
   const { balance: availableBalanceRaw, loading: balanceLoading } =
     useMyBalance(user?.id);
@@ -174,36 +102,28 @@ export default function Order() {
   const [submitError, setSubmitError] = useState("");
   const [lastOrder, setLastOrder] = useState(null);
 
-  // dropdown state (network)
   const [isNetworkDropdownOpen, setIsNetworkDropdownOpen] = useState(false);
   const networkDropdownRef = useRef(null);
 
-  // dropdown state (pair selector)
   const [isPairDropdownOpen, setIsPairDropdownOpen] = useState(false);
   const pairDropdownRef = useRef(null);
 
-  // floating header state
   const [showHeader, setShowHeader] = useState(true);
   const lastScrollY = useRef(0);
 
-  // daftar token yang benar-benar dijual
   const [supportedTokens, setSupportedTokens] = useState([]);
   const [tokensLoading, setTokensLoading] = useState(true);
   const [tokensError, setTokensError] = useState(null);
 
-  // pilih network (id dari token di /api/tokens)
   const [selectedTokenId, setSelectedTokenId] = useState(null);
 
-  // input wallet penerima
   const [toAddress, setToAddress] = useState("");
   const [walletError, setWalletError] = useState("");
 
-  // input amount IDR
   const [amountIdr, setAmountIdr] = useState("");
 
   const [showPreview, setShowPreview] = useState(false);
 
-  // scroll listener — sama seperti Home & Market
   useEffect(() => {
     const handleScroll = () => {
       const currentY = window.scrollY || window.pageYOffset;
@@ -229,7 +149,6 @@ export default function Order() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // click outside network dropdown
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -249,7 +168,6 @@ export default function Order() {
     };
   }, [isNetworkDropdownOpen]);
 
-  // click outside pair dropdown
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -269,7 +187,6 @@ export default function Order() {
     };
   }, [isPairDropdownOpen]);
 
-  // fetch daftar token yang dijual (backend)
   useEffect(() => {
     let aborted = false;
 
@@ -308,7 +225,6 @@ export default function Order() {
   const positive = token ? token.priceChangePercent >= 0 : true;
   const baseSymbol = token ? baseSymbolFromPair(token.symbol) : null;
 
-  // semua network yang support baseSymbol ini
   const supportedVariants = useMemo(() => {
     if (!baseSymbol) return [];
     return supportedTokens.filter(
@@ -316,16 +232,6 @@ export default function Order() {
     );
   }, [baseSymbol, supportedTokens]);
 
-  // apakah token ini support di CryptoKu (minimal ada 1 variant network)
-  const isSupported = supportedVariants.length > 0;
-
-  // daftar pair yang available utk dropdown (dari harga global)
-  const availablePairs = useMemo(
-    () => allPrices.filter((p) => p.status === "available"),
-    [allPrices]
-  );
-
-  // set default selected network saat variants berubah
   useEffect(() => {
     if (supportedVariants.length === 0) {
       setSelectedTokenId(null);
@@ -341,7 +247,13 @@ export default function Order() {
   const selectedBackendToken =
     supportedVariants.find((t) => t.id === selectedTokenId) || null;
 
-  const isValidWallet = !!toAddress && isValidEvmAddress(toAddress);
+  const isTonNetwork =
+    selectedBackendToken?.network_key?.toLowerCase() === "ton";
+
+  // use generic validator for network
+  const isValidWallet =
+    !!toAddress &&
+    isValidAddressForNetwork(selectedBackendToken?.network_key, toAddress);
 
   const gasEnabled =
     !!token && isSupported && !!selectedBackendToken && isValidWallet;
@@ -360,26 +272,23 @@ export default function Order() {
         ? selectedBackendToken.contract_address
         : undefined,
     enabled: gasEnabled,
+    opts: { pollingMs: 10000, debounceMs: 300 },
   });
 
   const isNativeToken =
     selectedBackendToken && !selectedBackendToken.contract_address;
 
-  // nilai numeric dari amountIdr (dalam rupiah)
   const amountIdrNumber = amountIdr ? Number(amountIdr) : 0;
 
-  // apakah melebihi saldo
   const exceedsBalance =
     amountIdrNumber > 0 &&
     availableBalanceNumber > 0 &&
     amountIdrNumber > availableBalanceNumber;
 
-  // tampilan "Rp 1.000"
   const formattedAmountIdr = amountIdrNumber
     ? `Rp ${amountIdrNumber.toLocaleString("id-ID")}`
     : "";
 
-  // KONVERSI & PERHITUNGAN: IDR -> USD -> potong fee & gas -> token diterima
   const amountUsd =
     amountIdrNumber && token?.price_idr && token?.price_usd
       ? (amountIdrNumber * Number(token.price_usd)) / Number(token.price_idr)
@@ -400,16 +309,28 @@ export default function Order() {
   const estimatedToken =
     usdAfterFee && token?.price_usd ? usdAfterFee / Number(token.price_usd) : 0;
 
-  // Minimum dinamis berdasarkan gas fee + service fee
   const dynamicMinIdr =
     gasData && !gasError && gasFeeIdr > MIN_PURCHASE_IDR
       ? Math.ceil(gasFeeIdr / (1 - serviceFeeRate)) + 1
       : MIN_PURCHASE_IDR;
 
-  // Cek apakah amount sudah memenuhi minimum
   const meetsDynamicMin =
     amountIdrNumber > 0 ? amountIdrNumber >= dynamicMinIdr : true;
 
+  // stronger balance check (prevent 0 >= 0 loophole)
+  const hasFiniteAvail =
+    Number.isFinite(availableBalanceNumber) && availableBalanceNumber >= 0;
+  const hasFiniteAmount =
+    Number.isFinite(amountIdrNumber) && amountIdrNumber >= 0;
+
+  // require both finite, require amount > 0, and require available covers amount
+  const hasSufficientBalance =
+    hasFiniteAvail &&
+    hasFiniteAmount &&
+    amountIdrNumber > 0 && // <- require user actually entered > 0
+    availableBalanceNumber >= amountIdrNumber;
+
+  // final canSubmitBuy uses the stricter flag
   const canSubmitBuy =
     gasEnabled &&
     !gasLoading &&
@@ -418,7 +339,7 @@ export default function Order() {
     amountIdrNumber > 0 &&
     estimatedToken > 0 &&
     meetsDynamicMin &&
-    !exceedsBalance;
+    hasSufficientBalance;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -435,7 +356,6 @@ export default function Order() {
     setSubmitError("");
     setIsSubmitting(true);
 
-    // 🚀 FEEDBACK INSTAN
     toast("Mengirim permintaan order…", {
       style: {
         background: "#111",
@@ -462,7 +382,6 @@ export default function Order() {
 
       setLastOrder(order);
 
-      // ✅ UPGRADE toast-nya
       toast("Order pembelian sedang diproses…", {
         style: {
           background: "#111",
@@ -493,7 +412,6 @@ export default function Order() {
 
   const handleSetMaxAmount = () => {
     if (!availableBalanceNumber || availableBalanceNumber <= 0) return;
-    // floor biar nggak ada pecahan aneh
     setAmountIdr(String(Math.floor(availableBalanceNumber)));
   };
 
@@ -503,22 +421,15 @@ export default function Order() {
 
   return (
     <div className={`min-h-screen px-4 pt-16 ${bgClass} text-white pb-32`}>
-      {/* ===========================
-          FLOATING HEADER
-      ============================ */}
+      {/* FLOATING HEADER */}
       <div className="fixed top-0 inset-x-0 z-40 flex justify-center pointer-events-none">
         <div className="w-full mx-auto pointer-events-auto">
           <div
-            className={`
-              rounded-b-lg px-5 border
-              backdrop-blur-md
-              shadow-md
-              ${
-                amoled
-                  ? "bg-black/85 border-zinc-900"
-                  : "bg-zinc-900/85 border-zinc-800"
-              }
-            `}
+            className={`rounded-b-lg px-5 border backdrop-blur-md shadow-md ${
+              amoled
+                ? "bg-black/85 border-zinc-900"
+                : "bg-zinc-900/85 border-zinc-800"
+            }`}
             style={{
               transform: showHeader ? "translateY(0)" : "translateY(-100%)",
               opacity: showHeader ? 1 : 0,
@@ -542,11 +453,9 @@ export default function Order() {
         </div>
       </div>
 
-      {/* ===========================
-          PAGE CONTENT
-      ============================ */}
+      {/* PAGE CONTENT */}
       <div className="max-w-md mx-auto space-y-5">
-        {/* Tombol kembali */}
+        {/* back button */}
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -565,7 +474,6 @@ export default function Order() {
           accent="emerald"
         />
 
-        {/* ====== JIKA TOKEN TIDAK ADA ====== */}
         {!token && (
           <div
             className={`rounded-2xl border p-4 mt-2 text-center ${
@@ -591,10 +499,9 @@ export default function Order() {
           </div>
         )}
 
-        {/* ====== MODE ADA TOKEN ====== */}
         {token && (
           <>
-            {/* INFO COIN + pair dropdown */}
+            {/* coin info & pair dropdown */}
             <div
               className={`rounded-2xl border border-zinc-800 p-4 shadow-md ${
                 amoled ? "bg-black/40" : "bg-zinc-900/80"
@@ -626,23 +533,13 @@ export default function Order() {
                       </svg>
                     </button>
 
-                    {/* Dropdown pair list */}
                     {availablePairs.length > 0 && (
                       <div
-                        className={`
-                          absolute z-30 mt-2 w-44
-                          rounded-md border border-zinc-700
-                          bg-zinc-950
-                          shadow-lg
-                          max-h-64 overflow-auto
-                          transform origin-top left-0 top-5
-                          transition-all duration-150 ease-out
-                          ${
-                            isPairDropdownOpen
-                              ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
-                              : "opacity-0 scale-95 -translate-y-1 pointer-events-none"
-                          }
-                        `}
+                        className={`absolute z-30 mt-2 w-44 rounded-md border border-zinc-700 bg-zinc-950 shadow-lg max-h-64 overflow-auto transform origin-top left-0 top-5 transition-all duration-150 ease-out ${
+                          isPairDropdownOpen
+                            ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
+                            : "opacity-0 scale-95 -translate-y-1 pointer-events-none"
+                        }`}
                       >
                         {availablePairs.map((p) => {
                           const active = p.symbol === token.symbol;
@@ -656,16 +553,11 @@ export default function Order() {
                                   state: { token: p },
                                 });
                               }}
-                              className={`
-                                w-full text-left px-3 py-2 text-xs
-                                flex items-center justify-between
-                                ${
-                                  active
-                                    ? "bg-emerald-500/10 text-emerald-300"
-                                    : "text-zinc-200"
-                                }
-                                hover:bg-zinc-800/70
-                              `}
+                              className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between ${
+                                active
+                                  ? "bg-emerald-500/10 text-emerald-300"
+                                  : "text-zinc-200"
+                              } hover:bg-zinc-800/70`}
                             >
                               <span>{formatPair(p.symbol)}</span>
                               {active && (
@@ -719,7 +611,6 @@ export default function Order() {
               )}
             </div>
 
-            {/* Jika token TIDAK tersedia */}
             {!tokensLoading && !tokensError && !isSupported && (
               <div
                 className={`rounded-2xl border border-amber-700/70 p-4 shadow-md ${
@@ -744,7 +635,6 @@ export default function Order() {
               </div>
             )}
 
-            {/* INPUT ORDER — hanya jika token didukung */}
             {!tokensLoading && !tokensError && isSupported && (
               <>
                 <form
@@ -757,7 +647,6 @@ export default function Order() {
                     Buy Order
                   </p>
 
-                  {/* Dropdown network */}
                   <div>
                     <label className="text-xs text-zinc-400">
                       Network & Token
@@ -767,29 +656,15 @@ export default function Order() {
                       <button
                         type="button"
                         onClick={() => setIsNetworkDropdownOpen((v) => !v)}
-                        className={`
-                          w-full
-                          flex items-center justify-between
-                          bg-black/40
-                          border
-                          rounded-xl
-                          px-3 py-2.5
-                          text-sm
-                          outline-none
-                          transition
-                          focus:border-emerald-500
-                          focus:ring-2 focus:ring-emerald-500/20
-                          ${
-                            isNetworkDropdownOpen
-                              ? "border-emerald-500/70 shadow-[0_0_0_1px_rgba(16,185,129,0.35)]"
-                              : "border-zinc-700"
-                          }
-                          ${
-                            supportedVariants.length === 0
-                              ? "opacity-60 cursor-not-allowed"
-                              : ""
-                          }
-                        `}
+                        className={`w-full flex items-center justify-between bg-black/40 border rounded-xl px-3 py-2.5 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 ${
+                          isNetworkDropdownOpen
+                            ? "border-emerald-500/70 shadow-[0_0_0_1px_rgba(16,185,129,0.35)]"
+                            : "border-zinc-700"
+                        } ${
+                          supportedVariants.length === 0
+                            ? "opacity-60 cursor-not-allowed"
+                            : ""
+                        }`}
                         disabled={supportedVariants.length === 0}
                       >
                         <span className="truncate text-left">
@@ -825,27 +700,17 @@ export default function Order() {
 
                       {supportedVariants.length > 0 && (
                         <div
-                          className={`
-                            absolute z-30 mt-1 w-full
-                            rounded-xl border border-zinc-700
-                            bg-zinc-950
-                            shadow-lg
-                            max-h-56 overflow-auto
-                            transform origin-top
-                            transition-all duration-150 ease-out
-                            ${
-                              isNetworkDropdownOpen
-                                ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
-                                : "opacity-0 scale-95 -translate-y-1 pointer-events-none"
-                            }
-                          `}
+                          className={`absolute z-30 mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-950 shadow-lg max-h-56 overflow-auto transform origin-top transition-all duration-150 ease-out ${
+                            isNetworkDropdownOpen
+                              ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
+                              : "opacity-0 scale-95 -translate-y-1 pointer-events-none"
+                          }`}
                         >
                           {supportedVariants.map((v) => {
                             const isActive = v.id === selectedTokenId;
                             const label = `${prettyNetworkName(
                               v.network_key
                             )} · ${v.contract_address ? baseSymbol : v.symbol}`;
-
                             return (
                               <button
                                 key={v.id}
@@ -854,16 +719,11 @@ export default function Order() {
                                   setSelectedTokenId(v.id);
                                   setIsNetworkDropdownOpen(false);
                                 }}
-                                className={`
-                                  w-full text-left px-3 py-2 text-sm
-                                  flex items-center justify-between
-                                  ${
-                                    isActive
-                                      ? "bg-emerald-500/10"
-                                      : "bg-transparent"
-                                  }
-                                  hover:bg-zinc-800/60
-                                `}
+                                className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between ${
+                                  isActive
+                                    ? "bg-emerald-500/10"
+                                    : "bg-transparent"
+                                } hover:bg-zinc-800/60`}
                               >
                                 <span className="truncate">{label}</span>
                                 {isActive && (
@@ -889,14 +749,17 @@ export default function Order() {
                     )}
                   </div>
 
-                  {/* Wallet penerima */}
                   <div>
                     <label className="text-xs text-zinc-400">
                       Wallet penerima
                     </label>
                     <input
                       type="text"
-                      placeholder="0x..."
+                      placeholder={
+                        isTonNetwork
+                          ? "Alamat TON (UQ... / EQ... / 0x...)"
+                          : "0x..."
+                      }
                       value={toAddress}
                       onChange={(e) => {
                         const value = e.target.value;
@@ -907,9 +770,16 @@ export default function Order() {
                           return;
                         }
 
-                        if (!isValidEvmAddress(value)) {
+                        if (
+                          !isValidAddressForNetwork(
+                            selectedBackendToken?.network_key,
+                            value
+                          )
+                        ) {
                           setWalletError(
-                            "Address tidak valid. Gunakan address EVM 0x dengan 42 karakter."
+                            isTonNetwork
+                              ? "Address TON tidak valid. Gunakan address TON format base64url (misal: UQ..., EQ...) atau hex 0x dengan 64 karakter."
+                              : "Address tidak valid. Gunakan address EVM 0x dengan 42 karakter."
                           );
                         } else {
                           setWalletError("");
@@ -936,12 +806,12 @@ export default function Order() {
 
                     {toAddress && !walletError && (
                       <p className="text-[11px] text-emerald-400 mt-1">
-                        Address valid untuk jaringan EVM.
+                        Address valid untuk jaringan{" "}
+                        {isTonNetwork ? "TON" : "EVM"}.
                       </p>
                     )}
                   </div>
 
-                  {/* Amount IDR + MAX */}
                   <div>
                     <label className="text-xs text-zinc-400">
                       Amount (IDR)
@@ -1001,7 +871,6 @@ export default function Order() {
                     )}
                   </div>
 
-                  {/* Total token diterima */}
                   <div>
                     <label className="text-xs text-zinc-400">
                       Total diterima ({formatPair(token.symbol)})
@@ -1015,7 +884,6 @@ export default function Order() {
                     />
                   </div>
 
-                  {/* Estimasi Gas + Service Fee */}
                   <div className="border-t border-zinc-800 pt-4 mt-2 space-y-2 text-sm">
                     <p className="text-zinc-400 text-xs uppercase tracking-wider">
                       Estimasi Gas Fee
@@ -1108,7 +976,6 @@ export default function Order() {
               </>
             )}
 
-            {/* PREVIEW MODAL */}
             {showPreview && (
               <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
                 <div
@@ -1117,13 +984,9 @@ export default function Order() {
                 />
 
                 <div
-                  className={`
-                    relative z-10 w-full max-w-sm
-                    rounded-2xl border border-zinc-800
-                    shadow-xl
-                    ${amoled ? "bg-black" : "bg-zinc-900"}
-                    p-4 space-y-3
-                  `}
+                  className={`relative z-10 w-full max-w-sm rounded-2xl border border-zinc-800 shadow-xl ${
+                    amoled ? "bg-black" : "bg-zinc-900"
+                  } p-4 space-y-3`}
                 >
                   <h3 className="text-sm font-semibold text-white">
                     Konfirmasi Pembelian
@@ -1139,7 +1002,6 @@ export default function Order() {
                         {formatPair(token.symbol)}
                       </span>
                     </div>
-
                     <div className="flex justify-between">
                       <span className="text-zinc-400">Network</span>
                       <span className="font-medium">
@@ -1148,7 +1010,6 @@ export default function Order() {
                           : "-"}
                       </span>
                     </div>
-
                     <div className="flex justify-between">
                       <span className="text-zinc-400">Wallet penerima</span>
                       <span className="font-medium truncate max-w-[55%] text-right">
