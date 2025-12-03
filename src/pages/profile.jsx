@@ -460,7 +460,7 @@ export default function Profile() {
               </div>
 
               <div className="mt-3 border-t border-zinc-800 pt-3 text-[11px] text-zinc-500">
-                CryptoKu · versi 0.1.0 (beta)
+                CryptoKu · versi 0.2.5 (beta)
               </div>
             </section>
           </>

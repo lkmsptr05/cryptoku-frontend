@@ -6,9 +6,10 @@ import { useTheme } from "../contexts/ThemeContext";
 
 export default function BannerBox({
   label = "Banner",
-  title = "Judul banner",
-  description = "Deskripsi banner di sini",
-  accent = "emerald", // optional: emerald | blue | purple | red
+  title = "",
+  description = "",
+  bgImage = "",
+  accent = "emerald",
 }) {
   const { amoled } = useTheme();
 
@@ -19,32 +20,53 @@ export default function BannerBox({
     red: "bg-[radial-gradient(circle_at_top,_#ef4444_0,_transparent_55%)]",
   };
 
+  const noText = !title && !description;
+
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border shadow-lg p-4
-      ${
-        amoled
-          ? "bg-black/40 border-zinc-800"
-          : "bg-gradient-to-r from-zinc-900/80 to-zinc-800/80 border-zinc-800"
-      }`}
+      className={`
+        relative overflow-hidden rounded-2xl border shadow-lg p-4
+        min-h-[110px]     // <— tinggi konsisten
+        flex items-end    // <— teks rata bawah seperti banner profesional
+        ${
+          amoled
+            ? "bg-black/40 border-zinc-800"
+            : "bg-gradient-to-r from-zinc-900/80 to-zinc-800/80 border-zinc-800"
+        }
+      `}
+      style={
+        noText && bgImage
+          ? {
+              backgroundImage: `url(${bgImage})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+            }
+          : {}
+      }
     >
-      {/* Accent glow */}
-      <div
-        className={`absolute inset-0 pointer-events-none opacity-30 ${
-          accentMap[accent] || accentMap.emerald
-        }`}
-      />
+      {/* Accent glow — hilang ketika pakai gambar */}
+      {!noText && (
+        <div
+          className={`absolute inset-0 pointer-events-none opacity-30 ${
+            accentMap[accent] || accentMap.emerald
+          }`}
+        />
+      )}
 
       {/* Content */}
-      <div className="relative flex flex-col gap-1">
-        <p className="text-xs uppercase tracking-[0.2em] text-zinc-400">
-          {label}
-        </p>
-
-        <p className="text-lg font-semibold">{title}</p>
-
-        <p className="text-sm text-zinc-400">{description}</p>
-      </div>
+      {!noText && (
+        <div className="relative flex flex-col gap-1">
+          {label && (
+            <p className="text-xs uppercase tracking-[0.2em] text-zinc-400">
+              {label}
+            </p>
+          )}
+          {title && <p className="text-lg font-semibold">{title}</p>}
+          {description && (
+            <p className="text-sm text-zinc-400">{description}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

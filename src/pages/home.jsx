@@ -45,6 +45,7 @@ export default function Home({ telegramUser, initData }) {
   const { marketIndex } = useMarketIndex();
 
   const { news, loading: newsLoading, error: newsError } = useCryptoNews();
+  const FRONTEND_PLACEHOLDER = "/assets/no-image-placeholder.png";
 
   // hide saldo
   const [hideBalance, setHideBalance] = useState(() => {
@@ -580,6 +581,12 @@ export default function Home({ telegramUser, initData }) {
                         <div className="w-[68px] h-[68px] flex-shrink-0 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
                           <img
                             src={item.urlToImage}
+                            onError={(e) => {
+                              // Ganti ke placeholder aman jika gambar (item.imageSrc) gagal dimuat
+                              e.currentTarget.src = FRONTEND_PLACEHOLDER;
+                              // Mencegah loop tak terbatas
+                              e.currentTarget.onerror = null;
+                            }}
                             alt={item.title}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-150"
                             loading="lazy"

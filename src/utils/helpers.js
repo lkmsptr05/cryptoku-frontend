@@ -1,94 +1,37 @@
-// src/hooks/useGasEstimate.js
-import { useEffect, useRef, useState } from "react";
-import { API_BASE_URL } from "../config/api";
+// src/utils/helpers.js
 
 /**
- * useGasEstimate
- * - networkKey: backend network key (eg "ethereum", "ton")
- * - to: destination address
- * - tokenAddress: optional contract address
- * - enabled: boolean
- * - opts: { pollingMs, debounceMs }
+ * Helpers used across UI
  */
-export default function useGasEstimate({
-  networkKey,
-  to,
-  tokenAddress,
-  enabled = true,
-  opts = {},
-}) {
-  const pollingMs = typeof opts.pollingMs === "number" ? opts.pollingMs : 10000;
-  const debounceMs =
-    typeof opts.debounceMs === "number" ? opts.debounceMs : 300;
 
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState(null);
+export function mapNetworkKeyForGas(key = "") {
+  if (!key) return "";
+  const k = String(key).toLowerCase().trim();
 
-  const abortRef = useRef(null);
-  const debounceRef = useRef(null);
-  const pollRef = useRef(null);
+  if (k === "eth" || k === "ethereum") return "ethereum";
+  if (k === "bsc" || k === "binance" || k === "bnb") return "bsc";
+  if (k === "polygon" || k === "matic") return "polygon";
+  if (k === "optimism" || k === "op") return "optimism";
+  if (k === "arbitrum" || k === "arb") return "arbitrum";
+  if (k === "base") return "base";
+  if (k === "ton") return "ton";
+  if (k === "solana" || k === "sol") return "solana";
 
-  useEffect(() => {
-    if (!enabled || !networkKey || !to) {
-      setData(null);
-      setErrorMsg(null);
-      setLoading(false);
-      return;
-    }
+  return k;
+}
 
-    const paramsKey = `${networkKey}|${to}|${tokenAddress || ""}`;
+export function prettyNetworkName(key = "") {
+  if (!key) return "-";
+  const k = String(key).toLowerCase().trim();
 
-    const fetchOnce = async () => {
-      if (abortRef.current) {
-        abortRef.current.abort();
-      }
-      abortRef.current = new AbortController();
-      setLoading(true);
-      setErrorMsg(null);
+  if (k === "eth" || k === "ethereum") return "Ethereum";
+  if (k === "bsc" || k === "binance" || k === "bnb") return "BNB Chain";
+  if (k === "polygon" || k === "matic") return "Polygon";
+  if (k === "optimism" || k === "op") return "Optimism";
+  if (k === "arbitrum" || k === "arb") return "Arbitrum";
+  if (k === "base") return "Base";
+  if (k === "ton") return "TON";
+  if (k === "solana" || k === "sol") return "Solana";
 
-      try {
-        const params = new URLSearchParams({ network_key: networkKey, to });
-        if (tokenAddress) params.append("tokenAddress", tokenAddress);
-        const url = `${API_BASE_URL}/gas/estimate?${params.toString()}`;
-
-        const resp = await fetch(url, { signal: abortRef.current.signal });
-        if (!resp.ok) {
-          const txt = await resp.text().catch(() => null);
-          throw new Error(txt || `HTTP ${resp.status}`);
-        }
-        const json = await resp.json();
-        setData(json);
-      } catch (err) {
-        if (err.name === "AbortError") {
-          return;
-        }
-        console.error("useGasEstimate error:", err);
-        setErrorMsg(err.message || "Failed to fetch gas estimate");
-        setData(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const schedule = () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        fetchOnce();
-        if (pollRef.current) clearInterval(pollRef.current);
-        pollRef.current = setInterval(fetchOnce, pollingMs);
-      }, debounceMs);
-    };
-
-    schedule();
-
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      if (pollRef.current) clearInterval(pollRef.current);
-      if (abortRef.current) abortRef.current.abort();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [networkKey, to, tokenAddress, enabled, pollingMs, debounceMs]);
-
-  return { data, loading, errorMsg };
+  return key.charAt(0).toUpperCase() + key.slice(1);
 }

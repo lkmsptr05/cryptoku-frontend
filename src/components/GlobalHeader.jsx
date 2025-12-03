@@ -3,6 +3,7 @@ import React from "react";
 import { Sun, Moon, ChevronLeft, Bell } from "lucide-react";
 import { motion } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
+import useNotifications from "../hooks/useNotifications"; // <-- import hook
 
 export default function GlobalHeader({
   title = "CryptoKu",
@@ -18,8 +19,15 @@ export default function GlobalHeader({
   const navigate = useNavigate();
 
   const isNotificationsPage = location.pathname === "/notifications";
+  const { markAllAsRead } = useNotifications();
 
-  const handleBellClick = () => {
+  const handleBellClick = async () => {
+    try {
+      // tandai semua sebagai dibaca
+      await markAllAsRead();
+    } catch (err) {
+      console.error("Mark all read (header) failed:", err);
+    }
     if (!isNotificationsPage) {
       navigate("/notifications");
     } else {
@@ -106,10 +114,9 @@ export default function GlobalHeader({
           whileTap={{ scale: 0.9 }}
           onClick={handleBellClick}
           className={`
-            relative w-9 h-9 rounded-full flex items-center justify-center
-            border border-zinc-700/70
-            ${isAmoled ? "bg-black" : "bg-zinc-900"}
-          `}
+          relative w-9 h-9 rounded-full flex items-center justify-center
+          border border-zinc-700/70
+        `}
         >
           <Bell size={18} className="text-zinc-100" />
 

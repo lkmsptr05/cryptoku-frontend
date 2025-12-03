@@ -13,7 +13,6 @@ import useTelegramAuth from "../hooks/useTelegramAuth";
 import useMyBalance from "../hooks/useMyBalance";
 import toast from "react-hot-toast";
 
-// NEW imports (replaced inline validators & local useGasEstimate)
 import useGasEstimate from "../hooks/useGasEstimate";
 import { isValidAddressForNetwork } from "../utils/validators";
 import { mapNetworkKeyForGas, prettyNetworkName } from "../utils/helpers";
@@ -47,16 +46,6 @@ const formatTokenAmount = (v) => {
   return n.toFixed(6);
 };
 
-// map network key for backend RPC/gas endpoint
-// (moved to helpers and imported)
-// const mapNetworkKeyForGas = (key = "") => { ... }
-
-// validasi address sekarang di utils/validators.js
-// const isValidEvmAddress = ...
-// const isValidTonAddress = ...
-
-/* ====================== HOOK: useGasEstimate is moved to ../hooks/useGasEstimate.js ====================== */
-
 const formatUsdFee = (usd) => {
   const n = parseFloat(usd);
 
@@ -83,7 +72,7 @@ export default function Order() {
   const navigate = useNavigate();
   const { unreadCount } = useNotificationsBadge();
 
-  const { prices: allPrices } = useAllPrices();
+  const { prices: allPrices = [] } = useAllPrices();
 
   const { user } = useTelegramAuth();
   const { balance: availableBalanceRaw, loading: balanceLoading } =
@@ -124,6 +113,7 @@ export default function Order() {
 
   const [showPreview, setShowPreview] = useState(false);
 
+  // scroll listener
   useEffect(() => {
     const handleScroll = () => {
       const currentY = window.scrollY || window.pageYOffset;
@@ -149,6 +139,7 @@ export default function Order() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // network dropdown outside click
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -168,6 +159,7 @@ export default function Order() {
     };
   }, [isNetworkDropdownOpen]);
 
+  // pair dropdown outside click
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -187,6 +179,7 @@ export default function Order() {
     };
   }, [isPairDropdownOpen]);
 
+  // fetch supported tokens from backend
   useEffect(() => {
     let aborted = false;
 
@@ -225,6 +218,12 @@ export default function Order() {
   const positive = token ? token.priceChangePercent >= 0 : true;
   const baseSymbol = token ? baseSymbolFromPair(token.symbol) : null;
 
+  // availablePairs used by pair dropdown — restore it
+  const availablePairs = useMemo(
+    () => (allPrices || []).filter((p) => p.status === "available"),
+    [allPrices]
+  );
+
   const supportedVariants = useMemo(() => {
     if (!baseSymbol) return [];
     return supportedTokens.filter(
@@ -232,6 +231,10 @@ export default function Order() {
     );
   }, [baseSymbol, supportedTokens]);
 
+  // whether token has at least one supported variant
+  const isSupported = supportedVariants.length > 0;
+
+  // keep selected token id in sync with variants
   useEffect(() => {
     if (supportedVariants.length === 0) {
       setSelectedTokenId(null);
@@ -250,7 +253,7 @@ export default function Order() {
   const isTonNetwork =
     selectedBackendToken?.network_key?.toLowerCase() === "ton";
 
-  // use generic validator for network
+  // validate wallet address based on selected backend network
   const isValidWallet =
     !!toAddress &&
     isValidAddressForNetwork(selectedBackendToken?.network_key, toAddress);
@@ -317,20 +320,15 @@ export default function Order() {
   const meetsDynamicMin =
     amountIdrNumber > 0 ? amountIdrNumber >= dynamicMinIdr : true;
 
-  // stronger balance check (prevent 0 >= 0 loophole)
-  const hasFiniteAvail =
-    Number.isFinite(availableBalanceNumber) && availableBalanceNumber >= 0;
-  const hasFiniteAmount =
-    Number.isFinite(amountIdrNumber) && amountIdrNumber >= 0;
-
-  // require both finite, require amount > 0, and require available covers amount
+  // stronger balance logic: require loaded balance, positive and sufficient
   const hasSufficientBalance =
-    hasFiniteAvail &&
-    hasFiniteAmount &&
-    amountIdrNumber > 0 && // <- require user actually entered > 0
+    !balanceLoading &&
+    Number.isFinite(availableBalanceNumber) &&
+    availableBalanceNumber > 0 &&
+    Number.isFinite(amountIdrNumber) &&
+    amountIdrNumber > 0 &&
     availableBalanceNumber >= amountIdrNumber;
 
-  // final canSubmitBuy uses the stricter flag
   const canSubmitBuy =
     gasEnabled &&
     !gasLoading &&
@@ -341,16 +339,54 @@ export default function Order() {
     meetsDynamicMin &&
     hasSufficientBalance;
 
+  // handlers
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!canSubmitBuy) return;
+
+    if (!canSubmitBuy) {
+      if (!(Number.isFinite(amountIdrNumber) && amountIdrNumber > 0)) {
+        setSubmitError("Masukkan nominal pembelian yang valid.");
+      } else if (balanceLoading) {
+        setSubmitError("Saldo masih dimuat. Tunggu sebentar lalu coba lagi.");
+      } else if (!hasSufficientBalance) {
+        setSubmitError("Saldo tidak mencukupi untuk pembelian ini.");
+      } else if (!isValidWallet) {
+        setSubmitError(
+          "Wallet tujuan tidak valid untuk jaringan yang dipilih."
+        );
+      } else if (gasError || gasLoading) {
+        setSubmitError(
+          "Estimasi biaya jaringan belum tersedia. Coba lagi sebentar."
+        );
+      } else {
+        setSubmitError("Validasi gagal. Periksa kembali input Anda.");
+      }
+      return;
+    }
 
     setSubmitError("");
     setShowPreview(true);
   };
 
   const handleConfirmBuy = async () => {
-    if (!canSubmitBuy || isSubmitting) return;
+    if (isSubmitting) return;
+
+    if (balanceLoading) {
+      setSubmitError("Saldo masih dimuat. Tunggu sebentar lalu coba lagi.");
+      return;
+    }
+
+    if (!hasSufficientBalance) {
+      setSubmitError("Saldo tidak mencukupi untuk pembelian ini.");
+      return;
+    }
+
+    if (!canSubmitBuy) {
+      setSubmitError(
+        "Tidak dapat mengirim order saat ini. Periksa kembali input."
+      );
+      return;
+    }
 
     setShowPreview(false);
     setSubmitError("");
@@ -474,6 +510,7 @@ export default function Order() {
           accent="emerald"
         />
 
+        {/* If token not provided */}
         {!token && (
           <div
             className={`rounded-2xl border p-4 mt-2 text-center ${
@@ -499,9 +536,10 @@ export default function Order() {
           </div>
         )}
 
+        {/* If token exists */}
         {token && (
           <>
-            {/* coin info & pair dropdown */}
+            {/* INFO COIN + pair dropdown */}
             <div
               className={`rounded-2xl border border-zinc-800 p-4 shadow-md ${
                 amoled ? "bg-black/40" : "bg-zinc-900/80"
@@ -533,13 +571,22 @@ export default function Order() {
                       </svg>
                     </button>
 
+                    {/* Dropdown pair list */}
                     {availablePairs.length > 0 && (
                       <div
-                        className={`absolute z-30 mt-2 w-44 rounded-md border border-zinc-700 bg-zinc-950 shadow-lg max-h-64 overflow-auto transform origin-top left-0 top-5 transition-all duration-150 ease-out ${
-                          isPairDropdownOpen
-                            ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
-                            : "opacity-0 scale-95 -translate-y-1 pointer-events-none"
-                        }`}
+                        className={`absolute z-30 mt-2 w-44
+                          rounded-md border border-zinc-700
+                          bg-zinc-950
+                          shadow-lg
+                          max-h-64 overflow-auto
+                          transform origin-top left-0 top-5
+                          transition-all duration-150 ease-out
+                          ${
+                            isPairDropdownOpen
+                              ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
+                              : "opacity-0 scale-95 -translate-y-1 pointer-events-none"
+                          }
+                        `}
                       >
                         {availablePairs.map((p) => {
                           const active = p.symbol === token.symbol;
@@ -553,11 +600,15 @@ export default function Order() {
                                   state: { token: p },
                                 });
                               }}
-                              className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between ${
-                                active
-                                  ? "bg-emerald-500/10 text-emerald-300"
-                                  : "text-zinc-200"
-                              } hover:bg-zinc-800/70`}
+                              className={`w-full text-left px-3 py-2 text-xs
+                                flex items-center justify-between
+                                ${
+                                  active
+                                    ? "bg-emerald-500/10 text-emerald-300"
+                                    : "text-zinc-200"
+                                }
+                                hover:bg-zinc-800/70
+                              `}
                             >
                               <span>{formatPair(p.symbol)}</span>
                               {active && (
@@ -611,6 +662,7 @@ export default function Order() {
               )}
             </div>
 
+            {/* If token not supported on any network */}
             {!tokensLoading && !tokensError && !isSupported && (
               <div
                 className={`rounded-2xl border border-amber-700/70 p-4 shadow-md ${
@@ -635,6 +687,7 @@ export default function Order() {
               </div>
             )}
 
+            {/* INPUT ORDER — only when supported */}
             {!tokensLoading && !tokensError && isSupported && (
               <>
                 <form
@@ -647,6 +700,7 @@ export default function Order() {
                     Buy Order
                   </p>
 
+                  {/* Network dropdown */}
                   <div>
                     <label className="text-xs text-zinc-400">
                       Network & Token
@@ -656,15 +710,29 @@ export default function Order() {
                       <button
                         type="button"
                         onClick={() => setIsNetworkDropdownOpen((v) => !v)}
-                        className={`w-full flex items-center justify-between bg-black/40 border rounded-xl px-3 py-2.5 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 ${
-                          isNetworkDropdownOpen
-                            ? "border-emerald-500/70 shadow-[0_0_0_1px_rgba(16,185,129,0.35)]"
-                            : "border-zinc-700"
-                        } ${
-                          supportedVariants.length === 0
-                            ? "opacity-60 cursor-not-allowed"
-                            : ""
-                        }`}
+                        className={` 
+                          w-full
+                          flex items-center justify-between
+                          bg-black/40
+                          border
+                          rounded-xl
+                          px-3 py-2.5
+                          text-sm
+                          outline-none
+                          transition
+                          focus:border-emerald-500
+                          focus:ring-2 focus:ring-emerald-500/20
+                          ${
+                            isNetworkDropdownOpen
+                              ? "border-emerald-500/70 shadow-[0_0_0_1px_rgba(16,185,129,0.35)]"
+                              : "border-zinc-700"
+                          }
+                          ${
+                            supportedVariants.length === 0
+                              ? "opacity-60 cursor-not-allowed"
+                              : ""
+                          }
+                        `}
                         disabled={supportedVariants.length === 0}
                       >
                         <span className="truncate text-left">
@@ -700,17 +768,26 @@ export default function Order() {
 
                       {supportedVariants.length > 0 && (
                         <div
-                          className={`absolute z-30 mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-950 shadow-lg max-h-56 overflow-auto transform origin-top transition-all duration-150 ease-out ${
-                            isNetworkDropdownOpen
-                              ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
-                              : "opacity-0 scale-95 -translate-y-1 pointer-events-none"
-                          }`}
+                          className={`absolute z-30 mt-1 w-full
+                            rounded-xl border border-zinc-700
+                            bg-zinc-950
+                            shadow-lg
+                            max-h-56 overflow-auto
+                            transform origin-top
+                            transition-all duration-150 ease-out
+                            ${
+                              isNetworkDropdownOpen
+                                ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
+                                : "opacity-0 scale-95 -translate-y-1 pointer-events-none"
+                            }
+                          `}
                         >
                           {supportedVariants.map((v) => {
                             const isActive = v.id === selectedTokenId;
                             const label = `${prettyNetworkName(
                               v.network_key
                             )} · ${v.contract_address ? baseSymbol : v.symbol}`;
+
                             return (
                               <button
                                 key={v.id}
@@ -719,11 +796,15 @@ export default function Order() {
                                   setSelectedTokenId(v.id);
                                   setIsNetworkDropdownOpen(false);
                                 }}
-                                className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between ${
-                                  isActive
-                                    ? "bg-emerald-500/10"
-                                    : "bg-transparent"
-                                } hover:bg-zinc-800/60`}
+                                className={`w-full text-left px-3 py-2 text-sm
+                                  flex items-center justify-between
+                                  ${
+                                    isActive
+                                      ? "bg-emerald-500/10"
+                                      : "bg-transparent"
+                                  }
+                                  hover:bg-zinc-800/60
+                                `}
                               >
                                 <span className="truncate">{label}</span>
                                 {isActive && (
@@ -749,6 +830,7 @@ export default function Order() {
                     )}
                   </div>
 
+                  {/* Wallet input */}
                   <div>
                     <label className="text-xs text-zinc-400">
                       Wallet penerima
@@ -812,6 +894,7 @@ export default function Order() {
                     )}
                   </div>
 
+                  {/* Amount */}
                   <div>
                     <label className="text-xs text-zinc-400">
                       Amount (IDR)
@@ -871,6 +954,7 @@ export default function Order() {
                     )}
                   </div>
 
+                  {/* Total token received */}
                   <div>
                     <label className="text-xs text-zinc-400">
                       Total diterima ({formatPair(token.symbol)})
@@ -884,6 +968,7 @@ export default function Order() {
                     />
                   </div>
 
+                  {/* Gas estimation */}
                   <div className="border-t border-zinc-800 pt-4 mt-2 space-y-2 text-sm">
                     <p className="text-zinc-400 text-xs uppercase tracking-wider">
                       Estimasi Gas Fee
@@ -976,6 +1061,7 @@ export default function Order() {
               </>
             )}
 
+            {/* PREVIEW MODAL */}
             {showPreview && (
               <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
                 <div
@@ -1002,6 +1088,7 @@ export default function Order() {
                         {formatPair(token.symbol)}
                       </span>
                     </div>
+
                     <div className="flex justify-between">
                       <span className="text-zinc-400">Network</span>
                       <span className="font-medium">
@@ -1010,6 +1097,7 @@ export default function Order() {
                           : "-"}
                       </span>
                     </div>
+
                     <div className="flex justify-between">
                       <span className="text-zinc-400">Wallet penerima</span>
                       <span className="font-medium truncate max-w-[55%] text-right">

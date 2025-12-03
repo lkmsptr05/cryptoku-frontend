@@ -16,15 +16,9 @@ import MarketRowSkeleton from "../components/skeleton/MarketRowSkeleton";
 
 import toast from "react-hot-toast";
 
-/* -------------------- Constants -------------------- */
-// const TOKENS_API = "https://cryptoku-backend-beige.vercel.app/api/tokens";
-
 /* -------------------- Helpers -------------------- */
-
 const formatSymbol = (s) =>
-  s
-    ? s.toUpperCase().replace(/(USDT|USDC|BUSD|USD)$/i, "") // tambahin USD
-    : "";
+  s ? s.toUpperCase().replace(/(USDT|USDC|BUSD|USD)$/i, "") : "";
 
 const formatPrice = (price, currency = "USD") => {
   const n = parseFloat(price);
@@ -43,6 +37,7 @@ const formatPrice = (price, currency = "USD") => {
     maximumFractionDigits: n < 1 ? 8 : 2,
   });
 };
+
 const getPairParts = (symbol) => {
   const up = (symbol || "").toUpperCase();
   const m = up.match(/(USDT|USDC|BUSD|USD)$/);
@@ -90,7 +85,14 @@ const formatTime = (ts) => {
 };
 
 /* -------------------- PriceItem -------------------- */
-function PriceItem({ item, previous, amoled, translateForItem = 0, onClick }) {
+function PriceItem({
+  item,
+  previous,
+  amoled,
+  translateForItem = 0,
+  onClick,
+  disabled = false,
+}) {
   const change = Number(item.priceChangePercent) || 0;
   const positive = change > 0;
   const negative = change < 0;
@@ -117,22 +119,22 @@ function PriceItem({ item, previous, amoled, translateForItem = 0, onClick }) {
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
       ref={refFlash}
       style={{
         transform: `translateY(${translateForItem}px)`,
         transition: "transform 0.22s cubic-bezier(.2,.9,.2,1)",
+        cursor: disabled ? "default" : "pointer",
       }}
-      className={`
-        w-full text-left
-        transition-colors duration-300 p-4 rounded-2xl border
+      className={`w-full text-left transition-colors duration-300 p-4 rounded-2xl border
         ${
           amoled
             ? "bg-black/40 border-zinc-800"
             : "bg-zinc-900/75 border-zinc-800"
         }
-        active:scale-[0.99]
+        ${disabled ? "opacity-60" : "active:scale-[0.99]"}
       `}
+      aria-disabled={disabled}
     >
       <div className="flex items-center justify-between gap-3">
         {/* LEFT: symbol + IDR */}
@@ -146,14 +148,13 @@ function PriceItem({ item, previous, amoled, translateForItem = 0, onClick }) {
               {formatPrice(item.price_idr, "IDR")}
             </div>
 
-            {/* placeholder agar tinggi stabil */}
-            {/* <div className="text-[10px] mt-1 min-h-[14px]">
-              {!isSupported && (
-                <div className="absolute bottom-2 left-2 text-[10px] px-2 py-[2px] rounded-full bg-amber-500/20 text-amber-400">
-                  Coming Soon
-                </div>
-              )}
-            </div> */}
+            {disabled && (
+              <div className="mt-2">
+                <span className="inline-block text-[10px] px-2 py-[4px] rounded-full bg-amber-500/20 text-amber-300 border border-amber-700/30">
+                  Coming soon
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -258,6 +259,11 @@ export default function Market() {
     if (!pulling.current) return;
     pulling.current = false;
 
+    // Tambahkan logika refresh jika sudah melewati batas pull, misalnya 1.0 (atau 80% dari softLimit)
+    if (pullProgress > 0.8) {
+      refresh(); // Panggil fungsi refresh yang disediakan oleh useMarketPrices
+    }
+
     setPullProgress(0);
     setBaseTranslate(0);
   };
@@ -268,7 +274,15 @@ export default function Market() {
     const lengthFactor = Math.max(0.5, 1 - total / 80);
     return Math.round(base * sensitivity * lengthFactor);
   };
-  const total = sorted.length;
+
+  // partition into available vs unavailable (keurutan relatif tetap sama)
+  const availableItems = (sorted || []).filter((s) => s.status === "available");
+  const unavailableItems = (sorted || []).filter(
+    (s) => s.status !== "available"
+  );
+
+  const totalAvailable = availableItems.length;
+  const totalUnavailable = unavailableItems.length;
 
   /* -------------------- Floating header scroll logic (match Home) -------------------- */
   useEffect(() => {
@@ -326,10 +340,6 @@ export default function Market() {
     );
   };
 
-  const firstUnavailableIndex = sorted.findIndex(
-    (item) => item.status !== "available"
-  );
-
   return (
     <div
       className={`min-h-screen px-4 pt-16 pb-32 ${
@@ -374,11 +384,7 @@ export default function Market() {
       ============================ */}
       <div className="max-w-md mt-6 mx-auto">
         <BannerBox
-          label="Harga Pasar Crypto"
-          // Gunakan nilai dari state yang sudah diselesaikan
-          title="Pantau harga koin favoritmu"
-          description="Silahkan pilih koin."
-          accent="emerald"
+          bgImage="/assets/logo/cryptoku.png" // <-- Masukkan URL gambar di sini
         />
 
         {/* Info bar: last updated */}
@@ -452,49 +458,88 @@ export default function Market() {
           )}
 
           {/* ERROR */}
+          {!loading &&
+            !error &&
+            (sorted === null ||
+              (availableItems.length === 0 &&
+                unavailableItems.length === 0)) && (
+              <p className="mt-4 text-sm text-zinc-400">
+                Belum ada data market. Silahkan coba refresh.
+              </p>
+            )}
+
+          {/* ERROR DARI API */}
           {!loading && error && (
             <p className="mt-4 text-sm text-amber-400">{error}</p>
           )}
 
-          {/* DATA */}
-          {!loading && !error && sorted.length > 0 && (
+          {/* AVAILABLE LIST */}
+          {!loading && !error && availableItems.length > 0 && (
             <div className="space-y-3">
-              {sorted.map((item, i) => {
+              {availableItems.map((item, i) => {
                 const isSupported =
                   item.status === "available" && isItemSupported(item);
 
                 return (
-                  <React.Fragment key={item.symbol || i}>
-                    {/* ✅ MISAHKAN AREA AVAILABLE & UNAVAILABLE */}
-                    {i === firstUnavailableIndex &&
-                      firstUnavailableIndex !== -1 && (
-                        <div className="py-4 flex items-center gap-4">
-                          <div className="flex-1 h-px bg-zinc-800" />
-                          <span className="text-xs text-zinc-500 tracking-wide">
-                            Coming Soon
-                          </span>
-                          <div className="flex-1 h-px bg-zinc-800" />
-                        </div>
-                      )}
-
-                    <PriceItem
-                      item={item}
-                      previous={previousPrices.find(
-                        (p) => p.symbol === item.symbol
-                      )}
-                      amoled={amoled}
-                      translateForItem={computeItemTranslate(
-                        i,
-                        total,
-                        baseTranslate
-                      )}
-                      isSupported={isSupported}
-                      onClick={() => handleSelectToken(item)}
-                    />
-                  </React.Fragment>
+                  <PriceItem
+                    key={item.symbol || `avail-${i}`}
+                    item={item}
+                    previous={previousPrices.find(
+                      (p) => p.symbol === item.symbol
+                    )}
+                    amoled={amoled}
+                    translateForItem={computeItemTranslate(
+                      i,
+                      totalAvailable,
+                      baseTranslate
+                    )}
+                    onClick={() => handleSelectToken(item)}
+                    disabled={!isSupported}
+                  />
                 );
               })}
             </div>
+          )}
+
+          {/* DIVIDER -> Coming Soon */}
+          {!loading && !error && unavailableItems.length > 0 && (
+            <>
+              <div className="py-4 flex items-center gap-4">
+                <div className="flex-1 h-px bg-zinc-800" />
+                <span className="text-xs text-zinc-500 tracking-wide">
+                  Coming Soon
+                </span>
+                <div className="flex-1 h-px bg-zinc-800" />
+              </div>
+
+              <div className="space-y-3">
+                {unavailableItems.map((item, i) => (
+                  <PriceItem
+                    key={item.symbol || `unavail-${i}`}
+                    item={item}
+                    previous={previousPrices.find(
+                      (p) => p.symbol === item.symbol
+                    )}
+                    amoled={amoled}
+                    translateForItem={computeItemTranslate(
+                      i,
+                      totalUnavailable,
+                      baseTranslate
+                    )}
+                    onClick={() =>
+                      toast("🚧 Token ini belum tersedia", {
+                        style: {
+                          background: "#111",
+                          color: "#fff",
+                          border: "1px solid #27272a",
+                        },
+                      })
+                    }
+                    disabled={true}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </main>
       </div>
