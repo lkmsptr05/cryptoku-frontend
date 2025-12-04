@@ -96,11 +96,13 @@ export default function TopupSnapModal({ open, onClose }) {
             } catch (e) {}
 
             onClose();
-            toast(
+
+            toast.success(
               `Topup saldo sebesar Rp ${parsed.toLocaleString(
                 "id-ID"
               )} berhasil!`,
               {
+                duration: 2500, // ✅ Paksa auto-close 2.5 detik (bebas mau 2000/3000)
                 style: {
                   background: "#111",
                   color: "#fff",

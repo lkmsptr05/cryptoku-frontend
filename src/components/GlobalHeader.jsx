@@ -23,15 +23,14 @@ export default function GlobalHeader({
 
   const handleBellClick = async () => {
     try {
-      // tandai semua sebagai dibaca
+      if (!isNotificationsPage) {
+        navigate("/notifications");
+      } else {
+        navigate(-1);
+      }
       await markAllAsRead();
     } catch (err) {
       console.error("Mark all read (header) failed:", err);
-    }
-    if (!isNotificationsPage) {
-      navigate("/notifications");
-    } else {
-      navigate(-1);
     }
   };
 

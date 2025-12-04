@@ -37,7 +37,6 @@ function RouterWrapper({ telegramUser, initData }) {
   return (
     <>
       <PageTransition key={location.pathname}>
-        <Toaster position="top-center" />
         <Routes location={location}>
           <Route
             path="/"
@@ -184,10 +183,17 @@ export default function App() {
         <Toaster
           position="top-center"
           toastOptions={{
+            duration: 2500, // default: semua toast auto-close dalam 2.5 detik
             style: {
               background: "#111",
               color: "#fff",
               border: "1px solid #27272a",
+            },
+            success: {
+              duration: 2500,
+            },
+            error: {
+              duration: 3500,
             },
           }}
         />
